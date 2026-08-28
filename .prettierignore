@@ -1,0 +1,10 @@
+node_modules/
+dist/
+results/
+package-lock.json
+
+# Written by the harness, not by hand. `saveFlakes` and `saveDrift` emit
+# tab-indented JSON, so formatting these would leave a file the next run rewrites
+# and a working tree that is never clean.
+ledger/
+baselines/

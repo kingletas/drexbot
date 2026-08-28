@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Thin wrapper so the command is `drexbot` rather than a path into dist/.
+# Never a symlink: the CLI resolves the repository root from its own location.
+#
+# Node bundles its own CA list and ignores the system trust store, so a target
+# served over a locally-issued certificate fails verification here even though
+# curl and every browser on this machine accept it. The mkcert root is added
+# when it exists. Verification is never disabled -- a harness that skips TLS
+# checks cannot make any statement about a target's TLS.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+if [[ -z "${NODE_EXTRA_CA_CERTS:-}" ]]; then
+	for ca in "${HOME}/.local/share/mkcert/rootCA.pem" "/usr/local/share/ca-certificates/mkcert"*.crt; do
+		if [[ -r "$ca" ]]; then
+			export NODE_EXTRA_CA_CERTS="$ca"
+			break
+		fi
+	done
+fi
+
+exec node "${here}/../dist/src/cli/main.js" "$@"

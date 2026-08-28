@@ -1,0 +1,32 @@
+{
+	"name": "drexbot",
+	"version": "0.1.0",
+	"description": "Regression, acceptance, behaviour and performance testing for a Magento storefront",
+	"license": "MIT",
+	"type": "module",
+	"engines": {
+		"node": ">=20.19.0"
+	},
+	"bin": {
+		"drexbot": "./bin/drexbot"
+	},
+	"scripts": {
+		"build": "tsc -p .",
+		"typecheck": "tsc --noEmit -p .",
+		"test": "node --test dist/tests/",
+		"lint": "eslint .",
+		"format:check": "prettier --check ."
+	},
+	"dependencies": {
+		"@harness/kernel": "git+file:///home/letas/Development/tooling/harness-kernel",
+		"playwright": "^1.62.1"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.39.0",
+		"@types/node": "^20.19.9",
+		"eslint": "^9.39.0",
+		"prettier": "^3.9.6",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.68.0"
+	}
+}

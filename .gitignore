@@ -1,0 +1,37 @@
+node_modules/
+dist/
+
+# Secrets — every .env variant is ignored except the checked-in template
+.env
+.env.*
+!.env.example
+
+# Run output. Per-run artefacts are not committed.
+results/
+/test-results/
+
+# State signatures ARE committed: what a target refuses, what it does not
+# support and what is quarantined are facts about the software, identical on
+# every machine, and putting them under review means a check going permanently
+# unsupported shows up as a diff somebody has to approve.
+#
+# Measurement baselines are NOT, and the difference is not tidiness. A timing
+# is a fact about the machine that produced it, so a laptop's history judging
+# a CI runner's numbers reports a regression that is only a change of hardware.
+/baselines/*.measurements.json
+
+# The selfcheck stub's own history is NOT committed, and the two target ledgers
+# are. The stub is told what to be — every entry in its history comes from
+# somebody running `make check` or `make selfcheck-loud` on their own machine,
+# which is a fact about who ran the gates rather than about any software.
+
+
+# The user-level ~/.gitignore is core.excludesFile for every repository under
+# $HOME and excludes these outright. Without the negations this repository
+# silently loses its scripts and its node version pin.
+!*.sh
+!.nvmrc
+!*.local
+
+.DS_Store
+*.swp

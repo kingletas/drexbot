@@ -1,0 +1,355 @@
+{
+	"version": 1,
+	"entries": {
+		"searchInput": {
+			"candidates": [
+				"input[type=\"search\"]",
+				"input[name=\"q\"]",
+				"#search"
+			],
+			"winners": [
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1
+			]
+		},
+		"pageTitle": {
+			"candidates": [
+				"h1",
+				".page-title span",
+				".page-title"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"productTile": {
+			"candidates": [
+				"[data-container=\"product-grid\"] li",
+				"ol.products li.product-item",
+				"li.product-item"
+			],
+			"winners": [
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1,
+				1
+			]
+		},
+		"productLink": {
+			"candidates": [
+				"a.product-item-link",
+				".product-item-name a"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"productPrice": {
+			"candidates": [
+				"[data-price-type=\"finalPrice\"]",
+				".price-wrapper .price",
+				"span.price"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"addToCart": {
+			"candidates": [
+				"role=button[name=/add to cart/i]",
+				"button#product-addtocart-button",
+				"button.action.tocart"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"sizeOption": {
+			"candidates": [
+				"[data-attribute-code=\"size\"] .swatch-option",
+				".swatch-attribute.size .swatch-option"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"colourOption": {
+			"candidates": [
+				"[data-attribute-code=\"color\"] .swatch-option",
+				".swatch-attribute.color .swatch-option"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"successMessage": {
+			"candidates": [
+				"[data-ui-id=\"message-success\"]",
+				".message-success",
+				"div.message.success"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"minicartCounter": {
+			"candidates": [
+				".counter-number",
+				".minicart-wrapper .counter.qty"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"productTab": {
+			"candidates": [
+				"role=tab",
+				".product.data.items > .item.title",
+				".data.item.title"
+			],
+			"winners": [
+				1,
+				1,
+				1,
+				1
+			]
+		},
+		"productTabPanel": {
+			"candidates": [
+				".product.data.items > .item.content",
+				".data.item.content"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"minicartToggle": {
+			"candidates": [
+				"role=link[name=/my cart/i]",
+				"a.action.showcart",
+				"[data-block=\"minicart\"] .showcart"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"minicartItem": {
+			"candidates": [
+				".minicart-items .product-item",
+				"#mini-cart .item"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"minicartSubtotal": {
+			"candidates": [
+				".minicart-wrapper .subtotal .price",
+				".block-minicart .subtotal .price"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"cartSubtotal": {
+			"candidates": [
+				"[data-th=\"Subtotal\"] .price",
+				".cart-summary .grand .price",
+				".subtotal .price"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"cartQuantity": {
+			"candidates": [
+				".cart.item input.qty",
+				"input[name*=\"[qty]\"]"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"cartUpdate": {
+			"candidates": [
+				"role=button[name=/update shopping cart/i]",
+				"button[name=\"update_cart_action\"]"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"compareButton": {
+			"candidates": [
+				"role=link[name=/add to compare/i]",
+				"a.tocompare",
+				".action.tocompare"
+			],
+			"winners": [
+				1,
+				1,
+				1,
+				1
+			]
+		},
+		"compareCell": {
+			"candidates": [
+				"#product-comparison .product-item-name",
+				".table-comparison .product-item-name"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		},
+		"noResults": {
+			"candidates": [
+				".message.notice",
+				".message.empty",
+				"div.message.info.empty"
+			],
+			"winners": [
+				0,
+				0,
+				0,
+				0
+			]
+		}
+	}
+}

@@ -1,0 +1,262 @@
+{
+	"version": 1,
+	"checks": {
+		"kernel.preflight": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.home": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.category": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.search": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.cart": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.login": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.smoke.graphql": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.admin-is-a-login-form": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.admin-deep-link": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.rest.customers-me": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.rest.V1-products": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.rest.V1-orders": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.rest.store-storeConfigs": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.rest.directory-countries": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.app-etc-env-php": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.app-etc-config-php": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.git-config": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.env": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.composer-json": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.composer-lock": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.var-log-system-log": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.var-report": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.session-less.not-served.phpinfo-php": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.journey.search": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.journey.product-page": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.journey.add-to-cart": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.product-tabs-switch": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.swatch-changes-the-selection": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.minicart-lists-what-was-added": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.quantity-moves-the-subtotal": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.compare-holds-two-products": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		},
+		"magento.regression.no-results-says-so": {
+			"outcomes": [
+				"pass",
+				"pass",
+				"pass",
+				"pass"
+			]
+		}
+	}
+}
