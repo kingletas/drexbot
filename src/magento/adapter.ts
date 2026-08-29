@@ -14,6 +14,7 @@ import { probeStorefront } from './probe.js'
 import { sessionLessChecks, smokeChecks } from './checks.js'
 
 import { journeyChecks } from './journeys.js'
+import { depthChecks } from './depth.js'
 import { regressionChecks } from './regression.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from './selectors.js'
 import { WORKSPACE } from '../workspace.js'
@@ -121,6 +122,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 				['session-less', sessionLessChecks(http, adminPath)],
 				['journey', journeyChecks(browser, catalogue)],
 				['regression', regressionChecks(browser, catalogue)],
+				['depth', depthChecks(browser, catalogue)],
 			])
 		},
 

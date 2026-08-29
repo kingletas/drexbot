@@ -21,7 +21,7 @@ export const MAGENTO_AREAS: readonly Area[] = [
 		title: 'Checkout and payment',
 		uncovered: {
 			why: 'planned',
-			note: 'no payment method is configured in sandbox, so an order cannot be placed without taking money',
+			note: 'the steps up to the payment method are covered; placing an order needs a sandbox gateway, and no payment method is configured',
 		},
 	},
 	{

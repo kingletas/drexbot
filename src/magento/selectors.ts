@@ -66,6 +66,42 @@ export const LUMA_PROFILE: SelectorProfile = {
 	compareRow: ['#product-comparison tbody tr', '.table-comparison tbody tr'],
 	compareCell: ['#product-comparison .product-item-name', '.table-comparison .product-item-name'],
 
+	paginationNext: ['role=link[name=/next/i]', 'a.action.next', '.pages-item-next a'],
+	toolbarAmount: ['#toolbar-amount', '.toolbar-amount'],
+	filterTitle: ['.filter-options-title', '[data-role="title"].filter-options-title'],
+	filterOption: ['.filter-options-content a', '#narrow-by-list a', '.filter-options-item a'],
+	filterActive: ['.filter-current .item', '.filter-current .filter-value'],
+
+	cartRemove: ['role=link[name=/remove item/i]', 'a.action-delete', '.action.action-delete'],
+	cartEmpty: ['.cart-empty', '#maincontent .cart-empty p'],
+	proceedToCheckout: [
+		'role=button[name=/proceed to checkout/i]',
+		'button.checkout',
+		'.action.primary.checkout',
+	],
+
+	registerLink: ['role=link[name=/create an account/i]', 'a[href*="customer/account/create"]'],
+	firstName: ['#firstname', 'input[name="firstname"]'],
+	lastName: ['#lastname', 'input[name="lastname"]'],
+	emailField: ['#email_address', 'input[name="email"]', '#customer-email'],
+	passwordField: ['#password', 'input[name="password"]'],
+	passwordConfirm: ['#password-confirmation', 'input[name="password_confirmation"]'],
+	registerSubmit: ['role=button[name=/create an account/i]', 'button.submit', '.action.submit'],
+	accountGreeting: ['.box-information .box-content', '.welcome', '.logged-in'],
+
+	checkoutEmail: ['#customer-email', 'input[name="username"]'],
+	streetLine: ['input[name="street[0]"]', '.field.street input'],
+	city: ['input[name="city"]', '#city'],
+	postcode: ['input[name="postcode"]', '#postcode'],
+	region: ['select[name="region_id"]', '#region_id'],
+	telephone: ['input[name="telephone"]', '#telephone'],
+	shippingMethod: [
+		'.table-checkout-shipping-method input[type="radio"]',
+		'#checkout-shipping-method-load input',
+	],
+	checkoutNext: ['role=button[name=/next/i]', 'button.continue', '.button.action.continue'],
+	paymentStep: ['#checkout-step-payment', '.checkout-payment-method', '#payment'],
+
 	sortSelect: ['#sorter', 'select.sorter-options'],
 
 	noResults: ['.message.notice', '.message.empty', 'div.message.info.empty'],
