@@ -80,6 +80,14 @@ export const LUMA_PROFILE: SelectorProfile = {
 		'.action.primary.checkout',
 	],
 
+	wishlistAdd: ['role=link[name=/add to wish list/i]', 'a.action.towishlist', '.action.towishlist'],
+	wishlistItem: [
+		'.products-grid.wishlist .product-item-name',
+		'#wishlist-view-form .product-item-name',
+		'.wishlist .product-item-name',
+	],
+	wishlistEmpty: ['.wishlist .message.info.empty', '#wishlist-view-form .message.info.empty'],
+
 	registerLink: ['role=link[name=/create an account/i]', 'a[href*="customer/account/create"]'],
 	firstName: ['#firstname', 'input[name="firstname"]'],
 	lastName: ['#lastname', 'input[name="lastname"]'],

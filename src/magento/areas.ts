@@ -24,14 +24,7 @@ export const MAGENTO_AREAS: readonly Area[] = [
 			note: 'the steps up to the payment method are covered; placing an order needs a sandbox gateway, and no payment method is configured',
 		},
 	},
-	{
-		id: 'wishlist',
-		title: 'Wishlist',
-		uncovered: {
-			why: 'planned',
-			note: 'needs a provisioned customer, which the adapter cannot create yet',
-		},
-	},
+	{ id: 'wishlist', title: 'Wish list' },
 	{
 		id: 'admin-workflows',
 		title: 'Admin workflows — orders, catalogue, cache',

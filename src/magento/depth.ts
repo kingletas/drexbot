@@ -33,15 +33,54 @@ export const depthChecks = (
 		}
 	}
 
+	/**
+	 * Registers a customer through the storefront's own form and leaves the
+	 * session signed in as them. The address is returned so a check can assert
+	 * against the account it actually made.
+	 */
+	const registerCustomer = async (session: PageSession, nonce: string): Promise<string> => {
+		const { find, page } = session
+		const email = `drexbot-${nonce}@drexbot.test`
+
+		await page.goto(`${store.baseUrl}/customer/account/create/`, {
+			waitUntil: 'domcontentloaded',
+		})
+		await (await find('firstName', { unique: true })).fill('Drex')
+		await (await find('lastName', { unique: true })).fill('Bot')
+		await (await find('emailField', { unique: true })).fill(email)
+		await (await find('passwordField', { unique: true })).fill(`Dx-${nonce}-9!`)
+		await (await find('passwordConfirm', { unique: true })).fill(`Dx-${nonce}-9!`)
+
+		// waitForLoadState settles on the page that is already there, so a form
+		// submission is waited for by the URL it leaves rather than by a load that
+		// has not started.
+		await (await find('registerSubmit', { unique: true })).click()
+		await page.waitForURL(url => !url.pathname.includes('/create'), {
+			timeout: 60_000,
+			waitUntil: 'domcontentloaded',
+		})
+
+		return email
+	}
+
 	/** Adds the category's first product and lands on the cart page. */
 	const fillCart = async (session: PageSession): Promise<void> => {
 		await openProduct(session)
 		await chooseOptions(session)
+		// Adding is an AJAX post, and navigating away before it answers cancels it.
+		// The request is waited for rather than the banner, which belongs to the
+		// checks that are about the banner.
+		const added = session.page.waitForResponse(
+			response => response.url().includes('/checkout/cart/add') && response.status() < 400,
+			{ timeout: 60_000 },
+		)
 		await (await session.find('addToCart', { unique: true })).click()
-		await (await session.find('successMessage', { timeoutMs: 20_000 })).first().waitFor()
+		await added
+
 		await session.page.goto(`${new URL(session.page.url()).origin}/checkout/cart/`, {
 			waitUntil: 'domcontentloaded',
 		})
+		await (await session.find('cartRow', { timeoutMs: 30_000 })).first().waitFor()
 	}
 
 	return [
@@ -224,38 +263,26 @@ export const depthChecks = (
 			async body({ rng, record, artefactDir, attach }) {
 				const surface = await browser()
 				const nonce = Math.floor(rng() * 0xffffffff).toString(16)
-				const email = `drexbot-${nonce}@drexbot.test`
 
 				await surface.visit(
 					'/customer/account/create/',
 					async session => {
-						const { find, page } = session
-						await (await find('firstName', { unique: true })).fill('Drex')
-						await (await find('lastName', { unique: true })).fill('Bot')
-						await (await find('emailField', { unique: true })).fill(email)
-						await (await find('passwordField', { unique: true })).fill(`Dx-${nonce}-9!`)
-						await (await find('passwordConfirm', { unique: true })).fill(`Dx-${nonce}-9!`)
+						const email = await registerCustomer(session, nonce)
 						record('registered as', email)
+						record('landed on', new URL(session.page.url()).pathname)
 
-						// waitForLoadState settles on the page that is already there, so a form
-						// submission is waited for by the URL it leaves rather than by a load
-						// that has not started.
-						await (await find('registerSubmit', { unique: true })).click()
-						await page.waitForURL(url => !url.pathname.includes('/create'), {
-							timeout: 60_000,
-							waitUntil: 'domcontentloaded',
-						})
+						// This address, not any dashboard — and waited for, because Luma fills
+						// the contact block from a request that lands after the page has.
 
-						// The address is the assertion: a dashboard that renders for anybody
-						// proves nothing, and the account has to be *this* one.
-						const shown = await page.locator('body').innerText()
-						record('landed on', new URL(page.url()).pathname)
-
-						if (!shown.includes(email)) {
-							throw new AssertionFailure(
-								`registering did not leave ${email} signed in — the page never names the address`,
-							)
-						}
+						await session.page
+							.getByText(email, { exact: false })
+							.first()
+							.waitFor({ timeout: 30_000 })
+							.catch(() => {
+								throw new AssertionFailure(
+									`registering did not leave ${email} signed in — the account page never named the address`,
+								)
+							})
 					},
 					{ dir: artefactDir, attach },
 				)
@@ -313,6 +340,64 @@ export const depthChecks = (
 
 						await (await find('paymentStep', { timeoutMs: 90_000 })).first().waitFor()
 						record('reached', `the payment step at ${new URL(page.url()).hash || '/checkout/'}`)
+					},
+					{ dir: artefactDir, attach },
+				)
+			},
+		},
+		{
+			id: 'magento.depth.wishlist-holds-what-was-added',
+			title: 'A signed-in shopper can put a product on an empty wish list',
+			suite: 'depth',
+			area: 'wishlist',
+			// It registers a customer this harness cannot delete afterwards, so it
+			// may only run somewhere that declares itself disposable. The capability
+			// for provisioning promises removal too, and a storefront cannot.
+			needs: [...needs, 'isDisposable'],
+			async body({ rng, record, artefactDir, attach }) {
+				guard()
+				const surface = await browser()
+				const nonce = Math.floor(rng() * 0xffffffff).toString(16)
+
+				await surface.visit(
+					store.categoryPath,
+					async session => {
+						const { find, page, present } = session
+						await registerCustomer(session, nonce)
+
+						// A fresh account's list is empty, which is what makes the assertion
+						// a change rather than a count that happened to be above zero.
+						await page.goto(`${store.baseUrl}/wishlist/`, { waitUntil: 'domcontentloaded' })
+						const before = await present('wishlistItem', { timeoutMs: 3_000 })
+						record('wish list before', before ? 'already holds something' : 'empty')
+						if (before) {
+							throw new AssertionFailure('a newly registered account already has a wish list')
+						}
+
+						await page.goto(`${store.baseUrl}${store.categoryPath}`, {
+							waitUntil: 'domcontentloaded',
+						})
+						await openProduct(session)
+						const wanted = (await (await find('pageTitle')).first().innerText()).trim()
+
+						await (await find('wishlistAdd', { unique: true })).click()
+						await page.waitForURL(url => url.pathname.includes('/wishlist'), {
+							timeout: 60_000,
+							waitUntil: 'domcontentloaded',
+						})
+
+						const held = (await (await find('wishlistItem')).allInnerTexts()).map(name =>
+							name.trim(),
+						)
+						record('wish list after', held.join(', ') || 'still empty')
+
+						// The product, not a product: a list that renders one row proves
+						// nothing about what was added to it.
+						if (!held.some(name => name === wanted)) {
+							throw new AssertionFailure(
+								`the wish list does not hold "${wanted}" — it holds ${held.join(', ') || 'nothing'}`,
+							)
+						}
 					},
 					{ dir: artefactDir, attach },
 				)
