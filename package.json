@@ -18,7 +18,7 @@
 		"format:check": "prettier --check ."
 	},
 	"dependencies": {
-		"@harness/kernel": "git+file:///home/letas/Development/tooling/harness-kernel",
+		"@harness/kernel": "git+file:///home/letas/Development/typescript/harness-kernel",
 		"playwright": "^1.62.1"
 	},
 	"devDependencies": {
