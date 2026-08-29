@@ -1,3 +1,5 @@
+import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright'
 import type { DriftRecorder } from '@harness/kernel'
 import { AssertionFailure, TransportFailure } from '@harness/kernel'
@@ -20,6 +22,14 @@ export interface PageSession {
 	readonly find: (entry: string, options?: ResolveOptions) => Promise<Locator>
 	/** True when the entry resolves; records the winner just the same. */
 	readonly present: (entry: string, options?: ResolveOptions) => Promise<boolean>
+}
+
+/** Where a check may leave a recording of what happened, when it wants one. */
+export interface Capture {
+	/** The directory to write into, or undefined when the run is keeping none. */
+	readonly dir: () => string | undefined
+	/** Declares a file written, so the observation carries it. */
+	readonly attach: (kind: string, absolutePath: string) => void
 }
 
 export interface BrowserOptions {
@@ -131,14 +141,34 @@ export class BrowserSurface {
 	 * Runs one body in its own context and always tears it down, because a check
 	 * that inherits another's cookies is not testing what its name says.
 	 */
-	async visit<T>(path: string, body: (session: PageSession) => Promise<T>): Promise<T> {
+	async visit<T>(
+		path: string,
+		body: (session: PageSession) => Promise<T>,
+		capture?: Capture,
+	): Promise<T> {
+		// Asked once, before anything is recorded: a run that is keeping no
+		// evidence must not pay for a trace it is going to throw away.
+		const dir = capture?.dir()
 		let context: BrowserContext | undefined
+		let failed = false
 
 		try {
 			context = await this.browser.newContext({
 				viewport: this.options.viewport ?? { width: 1440, height: 900 },
 				ignoreHTTPSErrors: false,
+				...(dir === undefined
+					? {}
+					: {
+							recordVideo: { dir: join(dir, 'video') },
+							// Headers, statuses and timings without bodies. The trace already
+							// carries the bodies for the action that failed, and a HAR that
+							// embedded every image would be most of the budget.
+							recordHar: { path: join(dir, 'network.har'), content: 'omit' },
+						}),
 			})
+			if (dir !== undefined) {
+				await context.tracing.start({ screenshots: true, snapshots: true, sources: false })
+			}
 			const page = await context.newPage()
 
 			const response = await page.goto(`${this.options.baseUrl}${path}`, {
@@ -150,8 +180,48 @@ export class BrowserSurface {
 			}
 
 			return await body(this.session(page))
+		} catch (error) {
+			failed = true
+			throw error
 		} finally {
-			await context?.close().catch(() => undefined)
+			// keepOrDiscard closes the context itself, because neither the video nor
+			// the HAR exists until it has.
+			if (context !== undefined && dir !== undefined) {
+				await this.keepOrDiscard(context, dir, failed, capture)
+			} else {
+				await context?.close().catch(() => undefined)
+			}
+		}
+	}
+
+	/**
+	 * Saves the recording when the check failed and throws it away when it did
+	 * not, because a passing check that left a trace is a disk filling up for
+	 * nothing.
+	 */
+	private async keepOrDiscard(
+		context: BrowserContext,
+		dir: string,
+		failed: boolean,
+		capture: Capture | undefined,
+	): Promise<void> {
+		const trace = join(dir, 'trace.zip')
+		await context.tracing.stop(failed ? { path: trace } : {}).catch(() => undefined)
+		if (failed) capture?.attach('trace', trace)
+
+		// Both are written by close(), so what they are worth is only decided
+		// after it: the page is gone and the files are not there yet.
+		const video = context.pages()[0]?.video()
+		await context.close().catch(() => undefined)
+
+		const har = join(dir, 'network.har')
+		if (failed) {
+			capture?.attach('har', har)
+			const savedTo = await video?.path().catch(() => undefined)
+			if (savedTo !== undefined) capture?.attach('video', savedTo)
+		} else {
+			await video?.delete().catch(() => undefined)
+			rmSync(har, { force: true })
 		}
 	}
 

@@ -17,31 +17,35 @@ export const journeyChecks = (
 		title: 'A shopper can search and get results',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record, measure }) {
+		async body({ record, measure, artefactDir, attach }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
-			await surface.visit('/', async ({ page, find }) => {
-				const started = Date.now()
+			await surface.visit(
+				'/',
+				async ({ page, find }) => {
+					const started = Date.now()
 
-				await (await find('searchInput', { unique: true })).fill(store.searchTerm)
-				await page.keyboard.press('Enter')
-				await page.waitForLoadState('domcontentloaded')
+					await (await find('searchInput', { unique: true })).fill(store.searchTerm)
+					await page.keyboard.press('Enter')
+					await page.waitForLoadState('domcontentloaded')
 
-				measure({ name: 'search', value: Date.now() - started, unit: 'ms', stage: 'results' })
+					measure({ name: 'search', value: Date.now() - started, unit: 'ms', stage: 'results' })
 
-				const title = await (await find('pageTitle')).first().innerText()
-				record('results page', title.trim())
+					const title = await (await find('pageTitle')).first().innerText()
+					record('results page', title.trim())
 
-				const tiles = await (await find('productTile')).count()
-				record('products shown', String(tiles))
+					const tiles = await (await find('productTile')).count()
+					record('products shown', String(tiles))
 
-				if (tiles === 0) {
-					throw new AssertionFailure(
-						`a search for "${store.searchTerm}" rendered a results page with no products`,
-					)
-				}
-			})
+					if (tiles === 0) {
+						throw new AssertionFailure(
+							`a search for "${store.searchTerm}" rendered a results page with no products`,
+						)
+					}
+				},
+				{ dir: artefactDir, attach },
+			)
 		},
 	},
 	{
@@ -50,38 +54,42 @@ export const journeyChecks = (
 		title: 'A product page renders a price and a way to buy',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record, measure }) {
+		async body({ record, measure, artefactDir, attach }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
-			await surface.visit(store.categoryPath, async ({ page, find }) => {
-				await (await find('productLink')).first().click()
-				await page.waitForLoadState('domcontentloaded')
+			await surface.visit(
+				store.categoryPath,
+				async ({ page, find }) => {
+					await (await find('productLink')).first().click()
+					await page.waitForLoadState('domcontentloaded')
 
-				const started = Date.now()
-				const title = await (await find('pageTitle')).first().innerText()
-				record('product', title.trim())
+					const started = Date.now()
+					const title = await (await find('pageTitle')).first().innerText()
+					record('product', title.trim())
 
-				const price = await (await find('productPrice')).first().innerText()
-				record('price', price.trim())
-				measure({ name: 'product page', value: Date.now() - started, unit: 'ms', stage: 'pdp' })
+					const price = await (await find('productPrice')).first().innerText()
+					record('price', price.trim())
+					measure({ name: 'product page', value: Date.now() - started, unit: 'ms', stage: 'pdp' })
 
-				// Sampled once, this races the product form's own initialisation. What
-				// the shopper needs is that the button *becomes* usable, so that is asked.
-				const buy = await find('addToCart', { unique: true })
-				try {
-					await buy.first().waitFor({ state: 'visible', timeout: 15_000 })
-					await page.waitForFunction(
-						element => !(element as HTMLButtonElement).disabled,
-						await buy.first().elementHandle(),
-						{ timeout: 15_000 },
-					)
-				} catch {
-					throw new AssertionFailure(
-						`"${title.trim()}" renders an add-to-cart button that never became enabled`,
-					)
-				}
-			})
+					// Sampled once, this races the product form's own initialisation. What
+					// the shopper needs is that the button *becomes* usable, so that is asked.
+					const buy = await find('addToCart', { unique: true })
+					try {
+						await buy.first().waitFor({ state: 'visible', timeout: 15_000 })
+						await page.waitForFunction(
+							element => !(element as HTMLButtonElement).disabled,
+							await buy.first().elementHandle(),
+							{ timeout: 15_000 },
+						)
+					} catch {
+						throw new AssertionFailure(
+							`"${title.trim()}" renders an add-to-cart button that never became enabled`,
+						)
+					}
+				},
+				{ dir: artefactDir, attach },
+			)
 		},
 	},
 	{
@@ -90,43 +98,47 @@ export const journeyChecks = (
 		title: 'A product can be added to the cart',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record }) {
+		async body({ record, artefactDir, attach }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
-			await surface.visit(store.categoryPath, async ({ page, find, present }) => {
-				await (await find('productLink')).first().click()
-				await page.waitForLoadState('domcontentloaded')
+			await surface.visit(
+				store.categoryPath,
+				async ({ page, find, present }) => {
+					await (await find('productLink')).first().click()
+					await page.waitForLoadState('domcontentloaded')
 
-				// A configurable product refuses to go in the cart until every option
-				// is chosen, so the swatches are part of the journey rather than
-				// decoration. A simple product has none, and skipping them is correct.
-				for (const option of ['sizeOption', 'colourOption'] as const) {
-					if (await present(option)) {
-						await (await find(option)).first().click()
+					// A configurable product refuses to go in the cart until every option
+					// is chosen, so the swatches are part of the journey rather than
+					// decoration. A simple product has none, and skipping them is correct.
+					for (const option of ['sizeOption', 'colourOption'] as const) {
+						if (await present(option)) {
+							await (await find(option)).first().click()
+						}
 					}
-				}
 
-				await (await find('addToCart', { unique: true })).click()
+					await (await find('addToCart', { unique: true })).click()
 
-				const success = await find('successMessage', { timeoutMs: 20_000 })
-				const message = await success.first().innerText()
-				record('confirmation', message.trim().replace(/\s+/g, ' ').slice(0, 120))
+					const success = await find('successMessage', { timeoutMs: 20_000 })
+					const message = await success.first().innerText()
+					record('confirmation', message.trim().replace(/\s+/g, ' ').slice(0, 120))
 
-				if (!/added|cart/i.test(message)) {
-					throw new AssertionFailure(`adding to the cart reported "${message.trim()}"`)
-				}
+					if (!/added|cart/i.test(message)) {
+						throw new AssertionFailure(`adding to the cart reported "${message.trim()}"`)
+					}
 
-				const counter = await find('minicartCounter')
-				const shown = (await counter.first().innerText()).trim()
-				record('minicart count', shown === '' ? 'blank' : shown)
+					const counter = await find('minicartCounter')
+					const shown = (await counter.first().innerText()).trim()
+					record('minicart count', shown === '' ? 'blank' : shown)
 
-				if (shown === '' || shown === '0') {
-					throw new AssertionFailure(
-						`the cart reported success and the minicart still shows "${shown || 'nothing'}"`,
-					)
-				}
-			})
+					if (shown === '' || shown === '0') {
+						throw new AssertionFailure(
+							`the cart reported success and the minicart still shows "${shown || 'nothing'}"`,
+						)
+					}
+				},
+				{ dir: artefactDir, attach },
+			)
 		},
 	},
 ]
