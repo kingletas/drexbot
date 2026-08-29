@@ -2,6 +2,7 @@ import type { CheckDefinition } from '@harness/kernel'
 import { AssertionFailure, PreconditionFailure } from '@harness/kernel'
 import type { BrowserSurface, PageSession } from '../surfaces/browser.js'
 import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { answerShippingStep, fillCart, openProduct, registerCustomer } from './shopper.js'
 
 /**
  * The vanilla ground a release is signed off on beyond the first click: sorting,
@@ -21,67 +22,6 @@ export const depthChecks = (
 	/** The names on the listing, in the order the page put them. */
 	const listing = async ({ find }: PageSession): Promise<string[]> =>
 		(await (await find('productLink')).allInnerTexts()).map(name => name.trim())
-
-	const openProduct = async ({ page, find }: PageSession): Promise<void> => {
-		await (await find('productLink')).first().click()
-		await page.waitForLoadState('domcontentloaded')
-	}
-
-	const chooseOptions = async ({ find, present }: PageSession): Promise<void> => {
-		for (const option of ['sizeOption', 'colourOption'] as const) {
-			if (await present(option)) await (await find(option)).first().click()
-		}
-	}
-
-	/**
-	 * Registers a customer through the storefront's own form and leaves the
-	 * session signed in as them. The address is returned so a check can assert
-	 * against the account it actually made.
-	 */
-	const registerCustomer = async (session: PageSession, nonce: string): Promise<string> => {
-		const { find, page } = session
-		const email = `drexbot-${nonce}@drexbot.test`
-
-		await page.goto(`${store.baseUrl}/customer/account/create/`, {
-			waitUntil: 'domcontentloaded',
-		})
-		await (await find('firstName', { unique: true })).fill('Drex')
-		await (await find('lastName', { unique: true })).fill('Bot')
-		await (await find('emailField', { unique: true })).fill(email)
-		await (await find('passwordField', { unique: true })).fill(`Dx-${nonce}-9!`)
-		await (await find('passwordConfirm', { unique: true })).fill(`Dx-${nonce}-9!`)
-
-		// waitForLoadState settles on the page that is already there, so a form
-		// submission is waited for by the URL it leaves rather than by a load that
-		// has not started.
-		await (await find('registerSubmit', { unique: true })).click()
-		await page.waitForURL(url => !url.pathname.includes('/create'), {
-			timeout: 60_000,
-			waitUntil: 'domcontentloaded',
-		})
-
-		return email
-	}
-
-	/** Adds the category's first product and lands on the cart page. */
-	const fillCart = async (session: PageSession): Promise<void> => {
-		await openProduct(session)
-		await chooseOptions(session)
-		// Adding is an AJAX post, and navigating away before it answers cancels it.
-		// The request is waited for rather than the banner, which belongs to the
-		// checks that are about the banner.
-		const added = session.page.waitForResponse(
-			response => response.url().includes('/checkout/cart/add') && response.status() < 400,
-			{ timeout: 60_000 },
-		)
-		await (await session.find('addToCart', { unique: true })).click()
-		await added
-
-		await session.page.goto(`${new URL(session.page.url()).origin}/checkout/cart/`, {
-			waitUntil: 'domcontentloaded',
-		})
-		await (await session.find('cartRow', { timeoutMs: 30_000 })).first().waitFor()
-	}
 
 	return [
 		{
@@ -229,7 +169,7 @@ export const depthChecks = (
 				await surface.visit(
 					store.categoryPath,
 					async session => {
-						await fillCart(session)
+						await fillCart(session, store)
 						const before = await (await session.find('cartRow')).count()
 						if (before === 0) throw new AssertionFailure('nothing reached the cart to remove')
 
@@ -267,7 +207,7 @@ export const depthChecks = (
 				await surface.visit(
 					'/customer/account/create/',
 					async session => {
-						const email = await registerCustomer(session, nonce)
+						const email = await registerCustomer(session, store, nonce)
 						record('registered as', email)
 						record('landed on', new URL(session.page.url()).pathname)
 
@@ -302,7 +242,7 @@ export const depthChecks = (
 					store.categoryPath,
 					async session => {
 						const { find, page, present } = session
-						await fillCart(session)
+						await fillCart(session, store)
 						await (await find('proceedToCheckout', { unique: true })).click()
 
 						// Checkout is one page that swaps steps, so what is asserted is that
@@ -316,29 +256,11 @@ export const depthChecks = (
 							)
 						}
 
-						// The form is Knockout-rendered after the cart is fetched, so the
-						// first field is waited for rather than assumed.
-						await (await find('checkoutEmail', { timeoutMs: 90_000 })).first().waitFor()
-						for (const [entry, value] of [
-							['checkoutEmail', 'drexbot-guest@drexbot.test'],
-							['firstName', 'Drex'],
-							['lastName', 'Bot'],
-							['streetLine', '123 Test Street'],
-							['city', 'Austin'],
-							['postcode', '78701'],
-							['telephone', '5125550100'],
-						] as const) {
-							await (await find(entry, { unique: true, timeoutMs: 30_000 })).fill(value)
-						}
-						if (await present('region', { timeoutMs: 5_000 })) {
-							await (await find('region', { unique: true })).selectOption({ index: 1 })
-						}
-
-						// A rate only appears once the address is complete enough to price.
-						await (await find('shippingMethod', { timeoutMs: 90_000 })).first().check()
-						await (await find('checkoutNext', { unique: true })).click()
-
-						await (await find('paymentStep', { timeoutMs: 90_000 })).first().waitFor()
+						await answerShippingStep(session, {
+							email: 'drexbot-guest@drexbot.test',
+							firstName: 'Drex',
+							lastName: 'Bot',
+						})
 						record('reached', `the payment step at ${new URL(page.url()).hash || '/checkout/'}`)
 					},
 					{ dir: artefactDir, attach },
@@ -363,7 +285,7 @@ export const depthChecks = (
 					store.categoryPath,
 					async session => {
 						const { find, page, present } = session
-						await registerCustomer(session, nonce)
+						await registerCustomer(session, store, nonce)
 
 						// A fresh account's list is empty, which is what makes the assertion
 						// a change rather than a count that happened to be above zero.

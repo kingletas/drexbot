@@ -109,6 +109,27 @@ export const LUMA_PROFILE: SelectorProfile = {
 	],
 	checkoutNext: ['role=button[name=/next/i]', 'button.continue', '.button.action.continue'],
 	paymentStep: ['#checkout-step-payment', '.checkout-payment-method', '#payment'],
+	paymentMethodTitle: ['.payment-method-title label', '.payment-group .payment-method-title'],
+	paymentMethod: [
+		'#co-payment-form input[type="radio"][name="payment[method]"]',
+		'.payment-methods input[type="radio"]',
+	],
+	paymentUnavailable: ['.no-quotes-block', '.checkout-payment-method .message.notice'],
+	placeOrder: [
+		'role=button[name=/place order/i]',
+		'.payment-method._active button.action.primary.checkout',
+		'#co-payment-form button.action.primary.checkout',
+	],
+	checkoutSuccess: ['.checkout-success', '.checkout-onepage-success .column.main'],
+
+	orderLookupId: ['#oar-order-id', 'input[name="oar_order_id"]'],
+	orderLookupLastName: ['#oar-billing-lastname', 'input[name="oar_billing_lastname"]'],
+	orderLookupEmail: ['#oar_email', 'input[name="oar_email"]'],
+	orderLookupSubmit: [
+		'#oar-widget-orders-and-returns-form >> role=button[name=/continue/i]',
+		'#oar-widget-orders-and-returns-form button[type="submit"]',
+		'.form-orders-search button.action.submit',
+	],
 
 	sortSelect: ['#sorter', 'select.sorter-options'],
 

@@ -1,7 +1,8 @@
 import type { CheckDefinition } from '@harness/kernel'
 import { AssertionFailure, PreconditionFailure } from '@harness/kernel'
-import type { BrowserSurface, PageSession } from '../surfaces/browser.js'
+import type { BrowserSurface } from '../surfaces/browser.js'
 import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { chooseOptions, openProduct } from './shopper.js'
 
 /**
  * What a shopper does after the first click, every check asserting a *change*
@@ -12,18 +13,6 @@ export const regressionChecks = (
 	store: StoreBaseline,
 ): readonly CheckDefinition[] => {
 	const needs = ['browser'] as const
-
-	/** Opens the first product of the baselined category. */
-	const openProduct = async ({ page, find }: PageSession): Promise<void> => {
-		await (await find('productLink')).first().click()
-		await page.waitForLoadState('domcontentloaded')
-	}
-
-	const chooseOptions = async ({ find, present }: PageSession): Promise<void> => {
-		for (const option of ['sizeOption', 'colourOption'] as const) {
-			if (await present(option)) await (await find(option)).first().click()
-		}
-	}
 
 	const guard = (): void => {
 		if (!store.captured) throw new PreconditionFailure(NO_BASELINE)

@@ -16,14 +16,7 @@ export const MAGENTO_AREAS: readonly Area[] = [
 	{ id: 'graphql', title: 'The GraphQL surface' },
 	{ id: 'exposure', title: 'Files that must never be served' },
 	{ id: 'compare', title: 'Product comparison' },
-	{
-		id: 'checkout',
-		title: 'Checkout and payment',
-		uncovered: {
-			why: 'planned',
-			note: 'the steps up to the payment method are covered; placing an order needs a sandbox gateway, and no payment method is configured',
-		},
-	},
+	{ id: 'checkout', title: 'Checkout and payment' },
 	{ id: 'wishlist', title: 'Wish list' },
 	{
 		id: 'admin-workflows',

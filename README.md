@@ -18,8 +18,8 @@ browser surface and its fixtures.
 
 ## It asks a store for nothing but HTTPS
 
-**None of its 31 checks needs privileged access.** Nine drive a browser, the rest
-are plain HTTP, and the adapter declares `canReadDatabase: false`. So it can be
+**None of its 40 checks needs privileged access.** Eighteen drive a browser, the
+rest are plain HTTP, and the adapter declares `canReadDatabase: false`. So it can be
 pointed at any store it can reach — including one whose configuration is not
 yours to fix, which is why a failure repeats the store's own error banner rather
 than reporting a selector nobody can find.
@@ -38,6 +38,21 @@ need a catalogue report `blocked` and name the command.
 `baseline` is the one command the shared set does not have: a storefront is the
 only target whose checks need facts about a catalogue before they can ask for
 anything.
+
+## It places a real order, and cannot take it back
+
+```bash
+drexbot run --target magento --suite checkout
+```
+
+The store's own offline method — Check / Money order, active in every Magento
+that ships `Magento_OfflinePayments` — takes no money, so an order is placed
+without a gateway and without charging anything. Nothing here removes the order
+afterwards, which is why the check declares `isDisposable` and runs only where
+the environment says it may be written to.
+
+Placing is asserted by finding the order again through Orders and Returns, not
+by the success page: a page that names an order number is a page.
 
 ## Selectors, and the ledger that watches them rot
 
