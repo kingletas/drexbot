@@ -49,7 +49,9 @@ format-check: $(NODE_MODULES) ## Fail when a file is not in house style
 
 .PHONY: test
 test: build ## Unit-test drexbot, under a runner that is not the harness
-	node --test dist/tests/
+	@# Node's own discovery, not a path: passing `dist/tests/` worked on Node 20
+	@# and is read as a module name from 22 onward, which fails before a test runs.
+	node --test
 
 .PHONY: install
 install: build ## Put drexbot on PATH

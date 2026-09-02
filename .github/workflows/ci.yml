@@ -51,7 +51,7 @@ jobs:
         run: npx prettier --check .
 
       - name: Unit suite against the storefront stub
-        run: node --test dist/tests/
+        run: node --test
 
   browser:
     name: The browser surface launches
