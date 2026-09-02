@@ -168,7 +168,7 @@ export const saveStore = (path: string, baseline: StoreBaseline): void => {
 
 /** Named once, so every check that needs a catalogue asks for it the same way. */
 export const NO_BASELINE =
-	'no store baseline has been captured — run: houndbot baseline --target magento'
+	'no store baseline has been captured — run: drexbot baseline --target magento'
 
 /**
  * The stand-in used before anything has been captured; its `captured` flag is

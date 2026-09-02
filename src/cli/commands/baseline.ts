@@ -8,7 +8,7 @@ import { HttpSurface, type Harness, type Options } from '@harness/kernel'
  */
 export const captureBaseline = async (harness: Harness, options: Options): Promise<number> => {
 	if (options.target !== 'magento') {
-		process.stderr.write('houndbot: only the magento target has a store to baseline\n')
+		process.stderr.write('drexbot: only the magento target has a store to baseline\n')
 		return 2
 	}
 
@@ -33,7 +33,7 @@ export const captureBaseline = async (harness: Harness, options: Options): Promi
 		return 0
 	} catch (cause) {
 		process.stderr.write(
-			`houndbot: could not baseline ${baseUrl} — ${cause instanceof Error ? cause.message : String(cause)}\n`,
+			`drexbot: could not baseline ${baseUrl} — ${cause instanceof Error ? cause.message : String(cause)}\n`,
 		)
 		return 1
 	}

@@ -137,3 +137,39 @@ describe('the storefront session-less suite', () => {
 		assert.equal(publicProbe?.verdict, 'pass')
 	})
 })
+
+describe('whether the store may be written to', () => {
+	// Nothing here can undo a registration or an order, so the default has to be
+	// the refusing one.
+	const withDisposable = <T>(value: string | undefined, body: () => T): T => {
+		const before = process.env['MAGENTO_DISPOSABLE']
+		if (value === undefined) delete process.env['MAGENTO_DISPOSABLE']
+		else process.env['MAGENTO_DISPOSABLE'] = value
+		try {
+			return body()
+		} finally {
+			if (before === undefined) delete process.env['MAGENTO_DISPOSABLE']
+			else process.env['MAGENTO_DISPOSABLE'] = before
+		}
+	}
+
+	it('refuses by default, so an unvouched store is never written to', () => {
+		const capabilities = withDisposable(undefined, () => magentoTarget().capabilities)
+
+		assert.equal(capabilities.isDisposable, false)
+	})
+
+	it('is granted only by the environment saying so exactly', () => {
+		assert.equal(withDisposable('1', () => magentoTarget().capabilities).isDisposable, true)
+
+		// Every other value is a refusal. `0` and `false` are what somebody turning
+		// it off would write, and a truthiness test would have granted both.
+		for (const value of ['0', 'false', 'no', '', 'true', 'yes', '2']) {
+			assert.equal(
+				withDisposable(value, () => magentoTarget().capabilities).isDisposable,
+				false,
+				`MAGENTO_DISPOSABLE=${value} must not grant a destructive run`,
+			)
+		}
+	})
+})

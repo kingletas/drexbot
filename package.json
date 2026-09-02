@@ -3,6 +3,25 @@
 	"version": "0.1.0",
 	"description": "Regression, acceptance, behaviour and performance testing for a Magento storefront",
 	"license": "MIT",
+	"author": "Luis Tineo <code@kingletas.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kingletas/drexbot.git"
+	},
+	"bugs": {
+		"url": "https://github.com/kingletas/drexbot/issues"
+	},
+	"homepage": "https://github.com/kingletas/drexbot#readme",
+	"keywords": [
+		"magento",
+		"magento2",
+		"storefront",
+		"testing",
+		"acceptance-testing",
+		"regression-testing",
+		"playwright",
+		"smoke-tests"
+	],
 	"type": "module",
 	"engines": {
 		"node": ">=20.19.0"

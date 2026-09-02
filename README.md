@@ -3,6 +3,20 @@
 Regression, acceptance, behaviour and performance testing for a Magento
 storefront.
 
+## Installing it
+
+Node 20.19 or newer. Not on npm — clone it, and `make setup` fetches the dependencies and the one browser it drives:
+
+```bash
+git clone https://github.com/kingletas/drexbot && cd drexbot && make setup
+```
+
+```bash
+make install
+```
+
+That puts `drexbot` on your `PATH`, pointed back at the clone.
+
 ```bash
 drexbot baseline --target magento
 ```
@@ -13,7 +27,7 @@ drexbot run --target magento
 
 Silence means nothing is wrong. The verdict vocabulary, the silence contract, the
 ledgers and the worker pool all belong to
-[`@harness/kernel`](../harness-kernel/README.md); this package is the adapter, the
+[`@harness/kernel`](https://github.com/kingletas/harness-kernel); this package is the adapter, the
 browser surface and its fixtures.
 
 ## It asks a store for nothing but HTTPS
@@ -41,15 +55,21 @@ anything.
 
 ## It places a real order, and cannot take it back
 
-```bash
-drexbot run --target magento --suite checkout
-```
-
 The store's own offline method — Check / Money order, active in every Magento
 that ships `Magento_OfflinePayments` — takes no money, so an order is placed
 without a gateway and without charging anything. Nothing here removes the order
 afterwards, which is why the check declares `isDisposable` and runs only where
-the environment says it may be written to.
+the environment says it may be written to:
+
+```bash
+MAGENTO_DISPOSABLE=1 drexbot run --target magento --suite checkout
+```
+
+**It fails closed, and only that exact value opens it.** Unset, the checks that
+register an account or place an order report `unsupported` and name the
+capability they lack — they never fail, and they are never silently absent from
+the sheet. So pointing this at a store you did not mean to write to costs you
+two lines of output rather than an order somebody has to go and cancel.
 
 Placing is asserted by finding the order again through Orders and Returns, not
 by the success page: a page that names an order number is a page.
@@ -68,3 +88,16 @@ drexbot probe --target magento
 The probe walks the whole journey, reports which entries resolve and via which
 candidate, and **judges nothing** — it exits 0 even when nothing resolves,
 because a probe that failed would be a gate, and a gate is not what you run first.
+
+## The environment it reads
+
+| Variable             | Default                | What it decides                                                                     |
+| -------------------- | ---------------------- | ----------------------------------------------------------------------------------- |
+| `MAGENTO_URL`        | `https://vanilla.test` | The store to point at.                                                              |
+| `MAGENTO_DISPOSABLE` | unset                  | `1` allows the checks that write. Anything else, including `true`, refuses.         |
+| `MAGENTO_ADMIN_PATH` | `/admin`               | Where the admin lives, so the session-less probe knocks on the right door.          |
+| `MAGENTO_DIR`        | —                      | A checkout of the store's own code, so `run --since` can select checks from a diff. |
+
+## License
+
+MIT — see [LICENSE](LICENSE). [CONTRIBUTING.md](CONTRIBUTING.md) is the shape a change should arrive in, and [SECURITY.md](SECURITY.md) has the model and the reporting route.

@@ -20,12 +20,6 @@ results/
 # a CI runner's numbers reports a regression that is only a change of hardware.
 /baselines/*.measurements.json
 
-# The selfcheck stub's own history is NOT committed, and the two target ledgers
-# are. The stub is told what to be — every entry in its history comes from
-# somebody running `make check` or `make selfcheck-loud` on their own machine,
-# which is a fact about who ran the gates rather than about any software.
-
-
 # The user-level ~/.gitignore is core.excludesFile for every repository under
 # $HOME and excludes these outright. Without the negations this repository
 # silently loses its scripts and its node version pin.

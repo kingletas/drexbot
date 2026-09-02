@@ -5,7 +5,6 @@ import { DriftRecorder } from '@harness/kernel'
 import { BrowserSurface } from '../surfaces/browser.js'
 import { HttpSurface } from '@harness/kernel'
 import type { Target, TargetOptions } from '@harness/kernel'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { MAGENTO_AREAS } from './areas.js'
 import { loadStore, uncapturedStore, type StoreBaseline } from './baseline.js'
@@ -24,8 +23,15 @@ const DEFAULT_URL = 'https://vanilla.test'
 
 const DEFAULT_ADMIN_PATH = '/admin'
 
+/**
+ * Whether this store may be written to. Nothing here can undo a registration or
+ * an order, so it fails closed: the checks that write declare `isDisposable`
+ * and report `unsupported` until somebody sets this, naming what they lack.
+ */
+const disposable = (): boolean => process.env['MAGENTO_DISPOSABLE'] === '1'
+
 /** Only what is actually wired is declared true; the rest stay false. */
-const CAPABILITIES: Capabilities = {
+const capabilities = (): Capabilities => ({
 	browser: true,
 	canProvisionCustomers: false,
 	canProvisionCatalogue: false,
@@ -34,8 +40,8 @@ const CAPABILITIES: Capabilities = {
 	canReadDatabase: false,
 	canObserveOutboundWebhooks: false,
 	canObserveOutboundEmail: false,
-	isDisposable: true,
-}
+	isDisposable: disposable(),
+})
 
 /**
  * A Magento 2 storefront, reached over HTTPS on its own hostname because a bare
@@ -47,7 +53,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 	const http = new HttpSurface(baseUrl, 30_000)
 	const recorder = options.recorder ?? new DriftRecorder()
 
-	/** What this store is, captured by `houndbot baseline`; absent until somebody runs it. */
+	/** What this store is, captured by `drexbot baseline`; absent until somebody runs it. */
 	const store =
 		(options.store as StoreBaseline | undefined) ??
 		loadStore(join(WORKSPACE.baselines, `magento--${options.environment ?? 'local'}.store.json`))
@@ -69,7 +75,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 	return {
 		name: 'magento',
 		environment: options.environment ?? 'local',
-		capabilities: CAPABILITIES,
+		capabilities: capabilities(),
 
 		async preflight(): Promise<PreflightResult> {
 			try {
@@ -82,7 +88,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 					return {
 						reachable: false,
 						build: 'unknown',
-						capabilities: CAPABILITIES,
+						capabilities: capabilities(),
 						problem: `${baseUrl}/magento_version answered ${version.status}`,
 					}
 				}
@@ -90,21 +96,23 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 				return {
 					reachable: true,
 					build: version.body.trim() || 'unknown',
-					capabilities: CAPABILITIES,
+					capabilities: capabilities(),
 				}
 			} catch (cause) {
 				return {
 					reachable: false,
 					build: 'unknown',
-					capabilities: CAPABILITIES,
+					capabilities: capabilities(),
 					problem: cause instanceof Error ? cause.message : String(cause),
 				}
 			}
 		},
 
 		areas: () => MAGENTO_AREAS,
-		repoDir:
-			process.env['MAGENTO_DIR'] ?? join(homedir(), 'Development', 'magento', 'commerce-vanilla'),
+		// Undeclared unless somebody names a checkout: a default path is a guess
+		// about one machine, and `--changed` narrowing a run from the wrong tree
+		// would silently drop the checks a diff should have selected.
+		repoDir: process.env['MAGENTO_DIR'],
 		impact: () => MAGENTO_IMPACT,
 		probe: () =>
 			probeStorefront(baseUrl, {
