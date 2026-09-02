@@ -37,7 +37,7 @@
 		"format:check": "prettier --check ."
 	},
 	"dependencies": {
-		"@harness/kernel": "git+file:///home/letas/Development/typescript/harness-kernel",
+		"@harness/kernel": "git+https://github.com/kingletas/harness-kernel.git#53291e2fc38c7de81fd8115cad2a91a0083b3342",
 		"playwright": "^1.62.1"
 	},
 	"devDependencies": {
