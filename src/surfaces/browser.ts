@@ -1,8 +1,8 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright'
-import type { DriftRecorder } from '@harness/kernel'
-import { AssertionFailure, TransportFailure } from '@harness/kernel'
+import type { DriftRecorder } from 'harness-kernel'
+import { AssertionFailure, TransportFailure } from 'harness-kernel'
 
 /** An ordered list of ways to find one thing, most portable first. */
 export type Candidates = readonly string[]

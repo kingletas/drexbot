@@ -1,6 +1,6 @@
-import type { CheckDefinition } from '@harness/kernel'
-import { AssertionFailure, PreconditionFailure } from '@harness/kernel'
-import type { HttpSurface } from '@harness/kernel'
+import type { CheckDefinition } from 'harness-kernel'
+import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
+import type { HttpSurface } from 'harness-kernel'
 import { NO_BASELINE, type StoreBaseline } from './baseline.js'
 import { MUST_NOT_SERVE, REST_PROBES, storefrontPages } from './surfaces.js'
 

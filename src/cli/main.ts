@@ -1,4 +1,4 @@
-import { registryOf, runCli, type Harness } from '@harness/kernel'
+import { registryOf, runCli, type Harness } from 'harness-kernel'
 import { WORKSPACE } from '../workspace.js'
 import { magentoTarget } from '../magento/adapter.js'
 import { captureBaseline } from './commands/baseline.js'

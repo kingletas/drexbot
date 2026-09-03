@@ -55,7 +55,7 @@ The probe walks the whole journey, reports which selector entries resolved and v
 - `fixtures/` — the storefront stub and its theme pages. A new defect class goes here first.
 - `tests/` — run against the stub, never against a live store.
 
-Everything else — the run, the verdicts, the ledgers, the worker pool, the reporting — belongs to [`@harness/kernel`](https://github.com/kingletas/harness-kernel) and changes there.
+Everything else — the run, the verdicts, the ledgers, the worker pool, the reporting — belongs to [`harness-kernel`](https://github.com/kingletas/harness-kernel) and changes there.
 
 ## Sending a change
 

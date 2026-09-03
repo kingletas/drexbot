@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { discoverStore, uncapturedStore } from '../src/magento/baseline.js'
-import { HttpSurface } from '@harness/kernel'
+import { HttpSurface } from 'harness-kernel'
 
 /** A GraphQL endpoint that answers the four questions discovery asks. */
 const startCatalogue = async (

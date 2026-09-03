@@ -1,4 +1,4 @@
-import type { ImpactRule } from '@harness/kernel'
+import type { ImpactRule } from 'harness-kernel'
 
 /**
  * What a change to the store puts at risk. The map is always incomplete, so a

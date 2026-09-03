@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { PreconditionFailure } from '@harness/kernel'
-import type { HttpSurface } from '@harness/kernel'
+import { PreconditionFailure } from 'harness-kernel'
+import type { HttpSurface } from 'harness-kernel'
 
 /**
  * What this particular store is — data the checks read, not a report, because a

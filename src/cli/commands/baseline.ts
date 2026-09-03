@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { discoverStore, saveStore } from '../../magento/baseline.js'
-import { HttpSurface, type Harness, type Options } from '@harness/kernel'
+import { HttpSurface, type Harness, type Options } from 'harness-kernel'
 
 /**
  * Captures what a store is over GraphQL, read-only, so the checks stop

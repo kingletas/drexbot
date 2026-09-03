@@ -10,7 +10,7 @@ tested the Hound backend. The full history to that point is in that repository.
 It stands alone because it asks a store for nothing but HTTPS: none of its 40
 checks needs a database, a credential or a shell into the stack, so it can be
 pointed at any storefront it can reach.
-[`@harness/kernel`](https://github.com/kingletas/harness-kernel) is a dependency
+[`harness-kernel`](https://github.com/kingletas/harness-kernel) is a dependency
 rather than a sibling, and it is fetched from GitHub rather than from a path on
 one laptop.
 

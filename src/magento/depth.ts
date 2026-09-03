@@ -1,5 +1,5 @@
-import type { CheckDefinition } from '@harness/kernel'
-import { AssertionFailure, PreconditionFailure } from '@harness/kernel'
+import type { CheckDefinition } from 'harness-kernel'
+import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
 import type { BrowserSurface, PageSession } from '../surfaces/browser.js'
 import { NO_BASELINE, type StoreBaseline } from './baseline.js'
 import { answerShippingStep, fillCart, openProduct, registerCustomer } from './shopper.js'

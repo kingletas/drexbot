@@ -33,7 +33,7 @@ drexbot run --target magento
 
 Silence means nothing is wrong. The verdict vocabulary, the silence contract, the
 ledgers and the worker pool all belong to
-[`@harness/kernel`](https://github.com/kingletas/harness-kernel); this package is the adapter, the
+[`harness-kernel`](https://github.com/kingletas/harness-kernel); this package is the adapter, the
 browser surface and its fixtures.
 
 ## It asks a store for nothing but HTTPS

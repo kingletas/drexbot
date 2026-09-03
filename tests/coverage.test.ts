@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { coverageProblems } from '@harness/kernel'
+import { coverageProblems } from 'harness-kernel'
 import { magentoTarget } from '../src/magento/adapter.js'
 
 /**

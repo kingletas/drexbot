@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import { startThemeServer, type ThemeServer } from '../fixtures/theme-pages.js'
-import { DriftRecorder, judgeDrift, recordDrift, emptyDrift } from '@harness/kernel'
+import { DriftRecorder, judgeDrift, recordDrift, emptyDrift } from 'harness-kernel'
 import { BrowserSurface } from '../src/surfaces/browser.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from '../src/magento/selectors.js'
 

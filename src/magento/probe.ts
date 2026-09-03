@@ -1,5 +1,5 @@
-import { DriftRecorder } from '@harness/kernel'
-import type { ProbeFinding, ProbeReport } from '@harness/kernel'
+import { DriftRecorder } from 'harness-kernel'
+import type { ProbeFinding, ProbeReport } from 'harness-kernel'
 import { BrowserSurface, type PageSession } from '../surfaces/browser.js'
 import { LUMA_PROFILE } from './selectors.js'
 

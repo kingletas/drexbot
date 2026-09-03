@@ -1,4 +1,4 @@
-import type { Area } from '@harness/kernel'
+import type { Area } from 'harness-kernel'
 
 /**
  * The storefront's sign-off sheet, declared separately from the checks so it

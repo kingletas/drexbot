@@ -1,4 +1,4 @@
-import { AssertionFailure } from '@harness/kernel'
+import { AssertionFailure } from 'harness-kernel'
 import type { PageSession } from '../surfaces/browser.js'
 import type { StoreBaseline } from './baseline.js'
 

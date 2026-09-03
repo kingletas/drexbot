@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { startStorefrontStub } from '../fixtures/storefront-stub.js'
-import { probeSummary, renderProbe, type ProbeReport } from '@harness/kernel'
+import { probeSummary, renderProbe, type ProbeReport } from 'harness-kernel'
 import { probeStorefront } from '../src/magento/probe.js'
 
 const report = (findings: ProbeReport['findings']): ProbeReport => ({

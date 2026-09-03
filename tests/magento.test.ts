@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { startStorefrontStub, type StoreDefect } from '../fixtures/storefront-stub.js'
-import { defaultEnvironment } from '@harness/kernel'
-import { retryPolicy } from '@harness/kernel'
-import { startRun } from '@harness/kernel'
-import { preflightObservation, runChecks } from '@harness/kernel'
-import { summarize } from '@harness/kernel'
+import { defaultEnvironment } from 'harness-kernel'
+import { retryPolicy } from 'harness-kernel'
+import { startRun } from 'harness-kernel'
+import { preflightObservation, runChecks } from 'harness-kernel'
+import { summarize } from 'harness-kernel'
 import { magentoTarget } from '../src/magento/adapter.js'
 
 const against = async (defect: StoreDefect, suite = 'session-less') => {
