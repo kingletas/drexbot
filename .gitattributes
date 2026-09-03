@@ -1,0 +1,7 @@
+# Check every text file out with LF on every platform. Without this a Windows
+# clone gets CRLF and `prettier --check` fails on all of them at once, which
+# reads as the whole tree being misformatted rather than as a line ending.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary

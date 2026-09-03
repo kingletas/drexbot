@@ -17,6 +17,12 @@ make install
 
 That puts `drexbot` on your `PATH`, pointed back at the clone.
 
+The kernel is fetched from its own repository rather than from the registry, and
+**npm 12 refuses git dependencies by default** — it stops with `EALLOWGIT` before
+fetching anything. On npm 12, install with `npm ci --allow-git=all`, or use npm
+11, which Node 24 still ships. Nothing here sets that for you: it would relax the
+rule for every dependency rather than this one.
+
 ```bash
 drexbot baseline --target magento
 ```
