@@ -20,6 +20,11 @@ results/
 # a CI runner's numbers reports a regression that is only a change of hardware.
 /baselines/*.measurements.json
 
+# Nor is the notification state, for the same reason: it records who has been
+# told what on this machine, and a committed copy would make one person's
+# channel decide whether another person's run says anything.
+/baselines/*.notify.json
+
 # The user-level ~/.gitignore is core.excludesFile for every repository under
 # $HOME and excludes these outright. Without the negations this repository
 # silently loses its scripts and its node version pin.
