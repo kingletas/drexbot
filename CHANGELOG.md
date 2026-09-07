@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2
+
+**The wrapper works through a symlink now.** It worked out where `dist/` was from
+the path it was invoked by, so anything reaching it through a link looked for the
+CLI beside the link and died with a module it couldn't find. It follows the link
+chain first. `make install` was never affected — it writes its own wrapper — so
+this only ever bit someone who symlinked the entry point themselves.
+
+**`package.json` no longer claims a `bin`.** It advertised a `drexbot` command
+that an install could not deliver: the published tarball carries no `dist/` and
+there's no build step to make one, so the command would have pointed at code that
+was never there. The way to get drexbot is still the way the README says — clone
+it, then `make install` — and that path never read the field.
+
 ## 0.1.1
 
 Documentation only. Nothing about how it behaves has changed, and 0.1.0 remains a

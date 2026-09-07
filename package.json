@@ -1,6 +1,6 @@
 {
 	"name": "drexbot",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Regression, acceptance, behaviour and performance testing for a Magento storefront",
 	"license": "MIT",
 	"author": "Luis Tineo <code@kingletas.com>",
@@ -25,9 +25,6 @@
 	"type": "module",
 	"engines": {
 		"node": ">=20.19.0"
-	},
-	"bin": {
-		"drexbot": "./bin/drexbot"
 	},
 	"scripts": {
 		"build": "tsc -p .",

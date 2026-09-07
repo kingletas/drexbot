@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Thin wrapper so the command is `drexbot` rather than a path into dist/.
-# Never a symlink: the CLI resolves the repository root from its own location.
+# The CLI resolves the package root from this file's own location, so the link
+# chain below has to be followed before that path means anything.
 #
 # Node bundles its own CA list and ignores the system trust store, so a target
 # served over a locally-issued certificate fails verification here even though
@@ -10,7 +11,21 @@
 # checks cannot make any statement about a target's TLS.
 set -euo pipefail
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# A symlink to this file is not where the code is, so follow the link chain to
+# the real file before resolving dist/. Without this, anything reached through
+# a symlink looks for main.js beside the link and fails with a module it cannot
+# find.
+source="${BASH_SOURCE[0]}"
+while [[ -L "$source" ]]; do
+	target=$(readlink "$source")
+	if [[ $target == /* ]]; then
+		source="$target"
+	else
+		source="$(cd "$(dirname "$source")" && pwd)/$target"
+	fi
+done
+
+here=$(cd "$(dirname "$source")" && pwd)
 
 if [[ -z "${NODE_EXTRA_CA_CERTS:-}" ]]; then
 	for ca in "${HOME}/.local/share/mkcert/rootCA.pem" "/usr/local/share/ca-certificates/mkcert"*.crt; do
