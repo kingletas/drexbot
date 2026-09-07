@@ -1,0 +1,96 @@
+name: Release
+
+# Tagging is the whole trigger: `git tag v0.1.0 && git push --tags` proves the
+# tagged commit installs the way the README says it does, then publishes a
+# GitHub Release whose body is that version's CHANGELOG section.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # The tag, the declared version and the changelog have to agree, or the
+      # release ships one version's notes under another version's name.
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          declared="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$declared" ]; then
+            echo "::error::tag says $version, package.json says $declared"
+            exit 1
+          fi
+          packaging/release-notes.sh "$version" > /dev/null
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  install:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # The floor `engines` declares. CI already runs the suite on three
+      # majors, so what is left to prove at a tag is the one thing it does not
+      # touch: that a clone installs and the command runs.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20.x'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install it the way the README says
+        run: make install PREFIX="$HOME/.local/bin"
+
+      - name: Check the installed command runs
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          drexbot help | grep -F 'drexbot —'
+          drexbot help | grep -F 'baseline --target'
+
+  publish:
+    needs: [version, install]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # The release body is the changelog entry rather than a second account of
+      # the same release written by hand.
+      #
+      # Moving a tag runs this again, and creating a release that already exists
+      # is an error, so an existing one is updated in place.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          packaging/release-notes.sh "$version" > notes.md
+          if gh release view "v${version}" >/dev/null 2>&1; then
+            echo "v${version} exists: updating its notes"
+            gh release edit "v${version}" \
+              --title "drexbot ${version}" \
+              --notes-file notes.md
+          else
+            gh release create "v${version}" \
+              --target "$GITHUB_SHA" \
+              --title "drexbot ${version}" \
+              --notes-file notes.md
+          fi

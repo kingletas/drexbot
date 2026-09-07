@@ -1,5 +1,8 @@
 # drexbot
 
+[![CI](https://github.com/kingletas/drexbot/actions/workflows/ci.yml/badge.svg)](https://github.com/kingletas/drexbot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Regression, acceptance, behaviour and performance testing for a Magento
 storefront.
 

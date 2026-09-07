@@ -64,6 +64,22 @@ Everything else — the run, the verdicts, the ledgers, the worker pool, the rep
 - A new check arrives with a stub defect that makes it fail, and evidence that the healthy stub keeps it passing. One direction is not a test.
 - Update `CHANGELOG.md` under a new heading, in the voice of the entries already there: what changed for someone using it, not what the diff did.
 
+## Cutting a release
+
+The version is declared once, in `package.json`, and `npm version` moves it in the lockfile at the same time:
+
+```bash
+npm version 0.1.1 --no-git-tag-version
+```
+
+Add that version's section to `CHANGELOG.md`, run `make check`, and commit. Pushing the tag is the whole release trigger:
+
+```bash
+git tag v0.1.1 && git push origin main --tags
+```
+
+The workflow stops in seconds if the tag, `package.json` and the changelog disagree, rather than halfway through. It then installs the tagged commit the way the README tells you to and runs `drexbot help` off `PATH`, and publishes a GitHub Release whose body is that version's changelog section. `packaging/release-notes.sh 0.1.1` prints that body locally, so you can read it before it is public.
+
 ## Security
 
 Please do not open a public issue for a vulnerability. [SECURITY.md](SECURITY.md) has the model and the reporting route.
