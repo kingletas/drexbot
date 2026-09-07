@@ -8,11 +8,11 @@ This drives a storefront that belongs to somebody. Several of its checks are exp
 
 ## What it does to the store
 
-**It writes nothing unless the environment says it may.** The checks that register a customer or place an order declare `isDisposable`, and that capability comes from `MAGENTO_DISPOSABLE=1` and from nothing else — not from a flag, not from a suite, not from a config file. Any other value, including `true`, refuses. Unset, those checks report `unsupported`, name the capability they lack, and do not run. The default is refusal because nothing here can undo either act.
+**It writes nothing unless the environment says it may.** The checks that register a customer or place an order run only where `MAGENTO_DISPOSABLE=1` is set, and nothing else grants it — not a flag, not a suite, not a config file. Any other value, including `true`, refuses. Unset, those checks report `unsupported`, say what they are missing, and do not run. The default is refusal because nothing here can undo either act.
 
-**When it is granted, the writes are real and permanent.** An order is placed through the store's own offline method — Check / Money order, which takes no money and touches no gateway — and **nothing removes it afterwards**. A registration leaves a customer account behind. Both use a nonce-derived identity under `@drexbot.test` so they are findable, not so they are reversible. A check that writes carries `retry: NO_RETRY`, so a timeout after the fact cannot place a second order.
+**When it is granted, the writes are real and permanent.** An order is placed through the store's own offline method — Check / Money order, which takes no money and touches no gateway — and **nothing removes it afterwards**. A registration leaves a customer account behind. Both use a nonce-derived identity under `@drexbot.test` so they are findable, not so they are reversible. A check that writes is never tried twice, so a timeout after the fact cannot place a second order.
 
-**It reads nothing privileged.** No database connection, no admin credential, no shell into the stack; `canReadDatabase` is `false`. Everything it knows about a store it learned over HTTPS, which is why it can be pointed at one whose configuration is not yours to fix.
+**It reads nothing privileged.** No database connection, no admin credential, no shell into the stack, and nothing in it can open one. Everything it knows about a store it learned over HTTPS, which is why it can be pointed at one whose configuration is not yours to fix.
 
 ## What it leaves behind
 
@@ -23,7 +23,9 @@ This drives a storefront that belongs to somebody. Several of its checks are exp
 
 **The committed ledgers and baselines are deliberate, and they describe a catalogue.** `ledger/` records which selector candidate answered and which checks are quarantined; `baselines/*.store.json` records a category path, a search term and a product path. Those are facts about the software and about a demo catalogue, which is why they are under review rather than ignored. **A baseline captured from a store whose catalogue is not public is not something to commit** — check what is in it before it goes into a repository somebody else can read.
 
-**It holds no credentials of its own.** No config file, no keyring. `MAGENTO_URL`, `MAGENTO_ADMIN_PATH`, `MAGENTO_DISPOSABLE` and `MAGENTO_DIR` are the whole of its environment, and none of them is a secret.
+**It holds no credentials of its own.** No config file, no keyring. `MAGENTO_URL`, `MAGENTO_ADMIN_PATH`, `MAGENTO_DISPOSABLE` and `MAGENTO_DIR` are the whole of the store's half of its environment, and none of them is a secret.
+
+**The notification channel is the exception, and it is the kernel's.** `HARNESS_NOTIFY_WEBHOOK` is an incoming-webhook URL, which is a credential: anything holding it can post to that channel. `HARNESS_NOTIFY_SMTP` may name an internal host. Neither is read unless you set `HARNESS_NOTIFY`, and neither belongs in a shell history, a CI log or a committed file. [`docs/configuration.md`](docs/configuration.md) has the full list.
 
 ## Reporting a vulnerability
 

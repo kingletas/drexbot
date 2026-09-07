@@ -6,6 +6,18 @@
 Regression, acceptance, behaviour and performance testing for a Magento
 storefront.
 
+## Documentation
+
+|                                                         |                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| [From nothing to a checked store](docs/from-nothing.md) | You have never used a test harness. Start here                |
+| [Getting started](docs/getting-started.md)              | You know what a harness is. Ten minutes                       |
+| [User guide](docs/user-guide.md)                        | Every command, every flag, every verdict                      |
+| [Configuration](docs/configuration.md)                  | The environment it reads, and the files it keeps              |
+| [Architecture](docs/architecture.md)                    | Kernel and adapter, and how a change gets made                |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                      | The shape a change should arrive in, and how a release is cut |
+| [SECURITY.md](SECURITY.md)                              | The model, and where to report something                      |
+
 ## Installing it
 
 Node 20.19 or newer. Not on npm — clone it, and `make setup` fetches the dependencies and the one browser it drives:
@@ -42,10 +54,10 @@ browser surface and its fixtures.
 ## It asks a store for nothing but HTTPS
 
 **None of its 40 checks needs privileged access.** Eighteen drive a browser, the
-rest are plain HTTP, and the adapter declares `canReadDatabase: false`. So it can be
+rest are plain HTTP, and nothing in it can open a database connection. So it can be
 pointed at any store it can reach — including one whose configuration is not
-yours to fix, which is why a failure repeats the store's own error banner rather
-than reporting a selector nobody can find.
+yours to fix, which is why a failure carries the store's own error banner and
+what is actually on the page, rather than only a selector nobody can find.
 
 ## Capture the store before running against it
 
@@ -67,16 +79,16 @@ anything.
 The store's own offline method — Check / Money order, active in every Magento
 that ships `Magento_OfflinePayments` — takes no money, so an order is placed
 without a gateway and without charging anything. Nothing here removes the order
-afterwards, which is why the check declares `isDisposable` and runs only where
-the environment says it may be written to:
+afterwards, which is why the check runs only where the environment says the
+store may be written to:
 
 ```bash
 MAGENTO_DISPOSABLE=1 drexbot run --target magento --suite checkout
 ```
 
 **It fails closed, and only that exact value opens it.** Unset, the checks that
-register an account or place an order report `unsupported` and name the
-capability they lack — they never fail, and they are never silently absent from
+register an account or place an order report `unsupported` and say what they
+are missing — they never fail, and they are never silently absent from
 the sheet. So pointing this at a store you did not mean to write to costs you
 two lines of output rather than an order somebody has to go and cancel.
 
@@ -100,12 +112,12 @@ because a probe that failed would be a gate, and a gate is not what you run firs
 
 ## The environment it reads
 
-| Variable             | Default                | What it decides                                                                     |
-| -------------------- | ---------------------- | ----------------------------------------------------------------------------------- |
-| `MAGENTO_URL`        | `https://vanilla.test` | The store to point at.                                                              |
-| `MAGENTO_DISPOSABLE` | unset                  | `1` allows the checks that write. Anything else, including `true`, refuses.         |
-| `MAGENTO_ADMIN_PATH` | `/admin`               | Where the admin lives, so the session-less probe knocks on the right door.          |
-| `MAGENTO_DIR`        | —                      | A checkout of the store's own code, so `run --since` can select checks from a diff. |
+| Variable             | Default                | What it decides                                                                       |
+| -------------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| `MAGENTO_URL`        | `https://vanilla.test` | The store to point at.                                                                |
+| `MAGENTO_DISPOSABLE` | unset                  | `1` allows the checks that write. Anything else, including `true`, refuses.           |
+| `MAGENTO_ADMIN_PATH` | `/admin`               | Where the admin lives, so the session-less probe knocks on the right door.            |
+| `MAGENTO_DIR`        | —                      | A checkout of the store's own code, so `run --changed` can select checks from a diff. |
 
 ## License
 
