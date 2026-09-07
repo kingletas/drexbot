@@ -30,7 +30,7 @@ git clone https://github.com/kingletas/drexbot && cd drexbot && make setup
 make install
 ```
 
-That puts `drexbot` on your `PATH`, pointed back at the clone.
+This puts `drexbot` on your `PATH`, pointed back at the clone.
 
 The kernel is fetched from its own repository rather than from the registry, and
 **npm 12 refuses git dependencies by default** — it stops with `EALLOWGIT` before
@@ -55,7 +55,7 @@ browser surface and its fixtures.
 
 **None of its 40 checks needs privileged access.** Eighteen drive a browser, the
 rest are plain HTTP, and nothing in it can open a database connection. So it can be
-pointed at any store it can reach — including one whose configuration is not
+pointed at any store it can reach — including one whose configuration isn't
 yours to fix, which is why a failure carries the store's own error banner and
 what is actually on the page, rather than only a selector nobody can find.
 
@@ -70,11 +70,11 @@ Written into the source they pin the harness to one store, so the baseline is
 captured over GraphQL and read by the checks. Until it exists, the checks that
 need a catalogue report `blocked` and name the command.
 
-`baseline` is the one command the shared set does not have: a storefront is the
+`baseline` is the one command the shared set doesn't have: a storefront is the
 only target whose checks need facts about a catalogue before they can ask for
 anything.
 
-## It places a real order, and cannot take it back
+## It places a real order, and can't take it back
 
 The store's own offline method — Check / Money order, active in every Magento
 that ships `Magento_OfflinePayments` — takes no money, so an order is placed
@@ -89,7 +89,7 @@ MAGENTO_DISPOSABLE=1 drexbot run --target magento --suite checkout
 **It fails closed, and only that exact value opens it.** Unset, the checks that
 register an account or place an order report `unsupported` and say what they
 are missing — they never fail, and they are never silently absent from
-the sheet. So pointing this at a store you did not mean to write to costs you
+the sheet. So pointing this at a store you didn't mean to write to costs you
 two lines of output rather than an order somebody has to go and cancel.
 
 Placing is asserted by finding the order again through Orders and Returns, not
@@ -108,7 +108,7 @@ drexbot probe --target magento
 
 The probe walks the whole journey, reports which entries resolve and via which
 candidate, and **judges nothing** — it exits 0 even when nothing resolves,
-because a probe that failed would be a gate, and a gate is not what you run first.
+because a probe that failed would be a gate, and a gate isn't what you run first.
 
 ## The environment it reads
 
