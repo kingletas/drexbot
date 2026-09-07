@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.1
+
+Documentation only. Nothing about how it behaves has changed, and 0.1.0 remains a
+correct release of the same code.
+
+**Five guides, under `docs/`.** `from-nothing.md` takes you from never having used
+a test harness to a real verdict about a real store. `getting-started.md` is the
+ten-minute version for anyone who already knows what one is. `user-guide.md` covers
+every command, flag and verdict. `configuration.md` covers the environment it reads
+and the files it keeps, and why some of those are committed and some are not.
+`architecture.md` sets out where the line falls between the kernel and this adapter,
+and what happens to one check.
+
+**Three things the existing pages had wrong.** A failing browser check carries the
+page's own message alongside the candidates it tried, rather than instead of them.
+`--changed` is what narrows a run from a diff; `--since` only says what to compare
+against. And `HARNESS_NOTIFY_WEBHOOK` is a credential — anything holding it can post
+to that channel — where SECURITY.md had said the harness holds none.
+
 ## 0.1.0
 
 The first release, and the first one anybody else can install.
