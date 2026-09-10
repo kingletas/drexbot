@@ -485,7 +485,7 @@ That's everything a commit has to pass: the build, the linter, the formatter and
 
 ## Where to go next
 
-- [README](../README.md) — what it's, in one page
+- [README](../README.md) — what it is, in one page
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — the shape a change should arrive in, and how a release is cut
 - [SECURITY.md](../SECURITY.md) — the model, and where to report something
 - [`harness-kernel`](https://github.com/kingletas/harness-kernel) — the run, the verdicts, the ledgers and the reporting all live there. drexbot is the Magento half: the adapter, the browser surface and its fixtures

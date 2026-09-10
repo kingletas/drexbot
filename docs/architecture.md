@@ -144,7 +144,7 @@ Three things fall out of that shape:
 
 ## Five things that are deliberate
 
-**Being allowed to write is refused by default.** It comes from `MAGENTO_DISPOSABLE=1` and from nothing else — not `true`, not any other value. Nothing here can take back a registration or an order, so the permission has to be given deliberately, per store, by the person who knows which store it's.
+**Being allowed to write is refused by default.** It comes from `MAGENTO_DISPOSABLE=1` and from nothing else — not `true`, not any other value. Nothing here can take back a registration or an order, so the permission has to be given deliberately, per store, by the person who knows which store it is.
 
 **Selectors are a list, not a string, and the list is ordered most portable first.** A role-based selector comes before a Magento-specific class, which comes before a theme-specific one. Which candidate answered is written to the drift ledger, so an entry sliding down its own list is visible months before it stops resolving. An entry answering on its last candidate is the warning; there's nothing after it.
 
