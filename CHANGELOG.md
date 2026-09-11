@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**A browser check can no longer hang the run.** Against a store in developer mode, `magento.journey.product-page` opened a product while the category page was still loading its scripts, and then never finished closing its browser context. Playwright writes the network log before it closes the page, and that write waited for responses the navigation had cut off, which only give up when the page closes. The run sat there with no new line in its journal until somebody killed it. Pages are now closed before their context, and the check finishes in about three seconds.
+
+**Every browser step has a bound.** Clicks and navigations get 30 seconds unless a check asks for longer, stated rather than inherited. Calls Playwright never times out itself (counting matches, reading the page, saving the trace, closing) get 15 seconds, and fail as a `timeout` that names the step: _counting "pageTitle" (h1) timed out after 15s_.
+
+**Each browser suite has a time limit behind that.** 3 minutes an attempt for `journey` and `regression`, 10 for `depth` and `checkout`. At the limit the check's browser context is closed, its trace, network log and video are kept, and the reason names the last step it started. This needs harness-kernel `971da9a`, which adds the limit.
+
 ## 0.1.2
 
 **The wrapper works through a symlink now.** It worked out where `dist/` was from

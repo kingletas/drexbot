@@ -25,7 +25,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'product',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -59,7 +59,7 @@ export const regressionChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -69,7 +69,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'product',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -98,7 +98,7 @@ export const regressionChecks = (
 							throw new AssertionFailure('clicking a swatch left it looking exactly as it did')
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -108,7 +108,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'cart',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -143,7 +143,7 @@ export const regressionChecks = (
 							throw new AssertionFailure(`the mini cart subtotal reads "${subtotal}"`)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -153,7 +153,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'cart',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -187,7 +187,7 @@ export const regressionChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -197,7 +197,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'compare',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -231,7 +231,7 @@ export const regressionChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -241,7 +241,7 @@ export const regressionChecks = (
 			suite: 'regression',
 			area: 'search',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 				const nonsense = 'zzqqxxnothinghere'
@@ -262,7 +262,7 @@ export const regressionChecks = (
 							throw new AssertionFailure('a search with no matches rendered no message at all')
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},

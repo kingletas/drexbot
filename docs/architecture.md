@@ -12,7 +12,7 @@ One kernel that has never heard of Magento, one adapter that knows nothing else,
 - [What a target has to answer](#what-a-target-has-to-answer)
 - [What happens to one check](#what-happens-to-one-check)
 - [The modules worth knowing](#the-modules-worth-knowing)
-- [Five things that are deliberate](#five-things-that-are-deliberate)
+- [Six things that are deliberate](#six-things-that-are-deliberate)
 - [How a change gets made](#how-a-change-gets-made)
 
 ## The one rule
@@ -142,7 +142,7 @@ Three things fall out of that shape:
 
 `workspace.ts` is the only module that works out where the package root is. Everything else asks it. A module that counts its own depth gets silently repointed the day somebody moves it.
 
-## Five things that are deliberate
+## Six things that are deliberate
 
 **Being allowed to write is refused by default.** It comes from `MAGENTO_DISPOSABLE=1` and from nothing else — not `true`, not any other value. Nothing here can take back a registration or an order, so the permission has to be given deliberately, per store, by the person who knows which store it is.
 
@@ -151,6 +151,8 @@ Three things fall out of that shape:
 **How the store talks to a shopper is declared apart from the selector profile, and never goes through the drift ledger.** Error banners are read only when a check has already failed, so that entry would have no comparable history — a ledger row that only appears on a bad day can't tell you it has drifted.
 
 **Evidence is kept only where the verdict needs explaining.** A passing check discards its screenshots. A run that leaves a trace behind every time is a disk filling up for nothing.
+
+**Every browser call has a bound, and a check has a limit behind that.** Playwright times out actions and navigations but not everything: counting matches, reading the page and closing a context wait as long as it takes. drexbot bounds each of those itself, and closes a page before its context, because the network log is written on close and waits on the page. When the kernel's time limit aborts a check anyway, the surface closes the context, which fails whatever call the check was stuck in under its own name.
 
 **Nothing about a check depends on the order it ran in.** Its random choices come from the run's seed combined with its own id, so `--workers 4` and `--workers 1` make the same choices, and `--seed` replays them.
 

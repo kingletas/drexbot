@@ -30,7 +30,7 @@ export const depthChecks = (
 			suite: 'depth',
 			area: 'category',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -53,7 +53,7 @@ export const depthChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -63,7 +63,7 @@ export const depthChecks = (
 			suite: 'depth',
 			area: 'category',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -89,7 +89,7 @@ export const depthChecks = (
 							throw new AssertionFailure('the second page repeated the first')
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -99,7 +99,7 @@ export const depthChecks = (
 			suite: 'depth',
 			area: 'category',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -152,7 +152,7 @@ export const depthChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -162,7 +162,7 @@ export const depthChecks = (
 			suite: 'depth',
 			area: 'cart',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -188,7 +188,7 @@ export const depthChecks = (
 							throw new AssertionFailure('the cart lost its row and never said it was empty')
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -200,7 +200,7 @@ export const depthChecks = (
 			// It writes a customer this harness cannot delete afterwards, so it may
 			// only run somewhere that declares itself disposable.
 			needs: [...needs, 'isDisposable'],
-			async body({ rng, record, artefactDir, attach }) {
+			async body({ rng, record, artefactDir, attach, signal }) {
 				const surface = await browser()
 				const nonce = Math.floor(rng() * 0xffffffff).toString(16)
 
@@ -224,7 +224,7 @@ export const depthChecks = (
 								)
 							})
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -234,7 +234,7 @@ export const depthChecks = (
 			suite: 'depth',
 			area: 'checkout',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -263,7 +263,7 @@ export const depthChecks = (
 						})
 						record('reached', `the payment step at ${new URL(page.url()).hash || '/checkout/'}`)
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -276,7 +276,7 @@ export const depthChecks = (
 			// may only run somewhere that declares itself disposable. The capability
 			// for provisioning promises removal too, and a storefront cannot.
 			needs: [...needs, 'isDisposable'],
-			async body({ rng, record, artefactDir, attach }) {
+			async body({ rng, record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 				const nonce = Math.floor(rng() * 0xffffffff).toString(16)
@@ -321,7 +321,7 @@ export const depthChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},

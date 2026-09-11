@@ -17,7 +17,7 @@ export const journeyChecks = (
 		title: 'A shopper can search and get results',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record, measure, artefactDir, attach }) {
+		async body({ record, measure, artefactDir, attach, signal }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
@@ -44,7 +44,7 @@ export const journeyChecks = (
 						)
 					}
 				},
-				{ dir: artefactDir, attach },
+				{ dir: artefactDir, attach, signal },
 			)
 		},
 	},
@@ -54,7 +54,7 @@ export const journeyChecks = (
 		title: 'A product page renders a price and a way to buy',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record, measure, artefactDir, attach }) {
+		async body({ record, measure, artefactDir, attach, signal }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
@@ -88,7 +88,7 @@ export const journeyChecks = (
 						)
 					}
 				},
-				{ dir: artefactDir, attach },
+				{ dir: artefactDir, attach, signal },
 			)
 		},
 	},
@@ -98,7 +98,7 @@ export const journeyChecks = (
 		title: 'A product can be added to the cart',
 		suite: 'journey',
 		needs: ['browser'],
-		async body({ record, artefactDir, attach }) {
+		async body({ record, artefactDir, attach, signal }) {
 			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
 			const surface = await browser()
 
@@ -137,7 +137,7 @@ export const journeyChecks = (
 						)
 					}
 				},
-				{ dir: artefactDir, attach },
+				{ dir: artefactDir, attach, signal },
 			)
 		},
 	},

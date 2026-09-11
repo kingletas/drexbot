@@ -24,6 +24,25 @@ const DEFAULT_URL = 'https://vanilla.test'
 const DEFAULT_ADMIN_PATH = '/admin'
 
 /**
+ * How long one attempt of a browser check may run, by suite. Every browser step
+ * has its own bound; this is the backstop, set well above the slowest attempt
+ * a healthy store has taken. A suite not named here has the kernel's default.
+ */
+const SUITE_TIME_LIMITS_MS: Readonly<Record<string, number>> = {
+	journey: 3 * 60_000,
+	regression: 3 * 60_000,
+	depth: 10 * 60_000,
+	checkout: 10 * 60_000,
+}
+
+const limited = (suite: string, checks: readonly CheckDefinition[]): readonly CheckDefinition[] => {
+	const limit = SUITE_TIME_LIMITS_MS[suite]
+	return limit === undefined
+		? checks
+		: checks.map(check => ({ ...check, timeLimitMs: check.timeLimitMs ?? limit }))
+}
+
+/**
  * Whether this store may be written to. Nothing here can undo a registration or
  * an order, so it fails closed: the checks that write declare `isDisposable`
  * and report `unsupported` until somebody sets this, naming what they lack.
@@ -126,14 +145,15 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 			// says what is missing rather than silently losing rows.
 			const catalogue = store ?? uncapturedStore(baseUrl)
 
-			return new Map<string, readonly CheckDefinition[]>([
+			const suites: [string, readonly CheckDefinition[]][] = [
 				['smoke', smokeChecks(http, catalogue)],
 				['session-less', sessionLessChecks(http, adminPath)],
 				['journey', journeyChecks(browser, catalogue)],
 				['regression', regressionChecks(browser, catalogue)],
 				['depth', depthChecks(browser, catalogue)],
 				['checkout', checkoutChecks(browser, catalogue)],
-			])
+			]
+			return new Map(suites.map(([suite, checks]) => [suite, limited(suite, checks)]))
 		},
 
 		async dispose(): Promise<void> {

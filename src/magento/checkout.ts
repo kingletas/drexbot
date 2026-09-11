@@ -49,7 +49,7 @@ export const checkoutChecks = (
 			suite: 'checkout',
 			area: 'checkout',
 			needs: [...needs],
-			async body({ record, artefactDir, attach }) {
+			async body({ record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 
@@ -82,7 +82,7 @@ export const checkoutChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},
@@ -97,7 +97,7 @@ export const checkoutChecks = (
 			// A timeout anywhere after the order is placed would otherwise be
 			// retried, and the second attempt would place a second order.
 			retry: NO_RETRY,
-			async body({ rng, record, artefactDir, attach }) {
+			async body({ rng, record, artefactDir, attach, signal }) {
 				guard()
 				const surface = await browser()
 				const nonce = Math.floor(rng() * 0xffffffff).toString(16)
@@ -206,7 +206,7 @@ export const checkoutChecks = (
 							)
 						}
 					},
-					{ dir: artefactDir, attach },
+					{ dir: artefactDir, attach, signal },
 				)
 			},
 		},

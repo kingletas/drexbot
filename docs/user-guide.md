@@ -133,6 +133,8 @@ drexbot targets
 
 The two checks that write — registering a customer, placing an order — report `unsupported` until `MAGENTO_DISPOSABLE=1`. The one that places an order also refuses to retry: a timeout after an order is placed would otherwise be retried, and the second attempt places a second order.
 
+**A browser check ends in a verdict, even when the page stops answering.** Each step has a bound: 30 seconds for a click or a navigation unless the check asks for longer, and 15 seconds for anything Playwright doesn't time out itself, like counting matches or closing the page. Behind those, each suite has a limit per attempt: 3 minutes for `journey` and `regression`, 10 for `depth` and `checkout`. A check that hits one fails as a `timeout`, keeps its trace, network log and video, and its reason names the step it was on.
+
 ## The sign-off sheet
 
 Fourteen areas of a storefront: the home page, search, the category listing, the product page, the cart, the customer account, the admin, REST, GraphQL, files that must never be served, compare, checkout, the wish list, and admin workflows.
