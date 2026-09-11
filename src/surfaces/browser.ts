@@ -13,6 +13,8 @@ export type SelectorProfile = Readonly<Record<string, Candidates>>
 export interface ResolveOptions {
 	/** The entry names one control, so prefer a candidate matching exactly one visible element. */
 	readonly unique?: boolean
+	/** Answer only with a candidate matching something on screen, so an element hidden in the DOM reads as absent. */
+	readonly visible?: boolean
 	readonly timeoutMs?: number
 }
 
@@ -407,14 +409,16 @@ export class BrowserSurface {
 			throw new AssertionFailure(`the selector profile has no entry named "${entry}"`)
 		}
 
+		const locate = (candidate: string): Locator =>
+			options.visible === true
+				? page.locator(candidate).filter({ visible: true })
+				: page.locator(candidate)
+
 		// Wait once for any candidate, so auto-waiting still applies, then probe in
 		// order — Playwright resolves a union in DOM order, which is not priority.
 		const union = candidates
 			.slice(1)
-			.reduce(
-				(all, candidate) => all.or(page.locator(candidate)),
-				page.locator(candidates[0] as string),
-			)
+			.reduce((all, candidate) => all.or(locate(candidate)), locate(candidates[0] as string))
 
 		await union
 			.first()
@@ -435,7 +439,7 @@ export class BrowserSurface {
 		}
 
 		for (const [index, candidate] of candidates.entries()) {
-			const located = page.locator(candidate)
+			const located = locate(candidate)
 			const matches = await this.count(located, entry, candidate)
 			if (matches === 0) continue
 

@@ -124,6 +124,38 @@ describe('the drift ledger', () => {
 	})
 })
 
+describe('asking whether something a shopper can see is there', () => {
+	it('does not read a payment step hidden on the shipping step as present', async () => {
+		const { recorder, result } = await drive<boolean>('checkout-shipping', ({ present }) =>
+			present('paymentStep', { visible: true, timeoutMs: 500 }),
+		)
+
+		assert.equal(result, false)
+		// A hidden element must not teach the ledger that a candidate answered.
+		assert.equal(recorder.best().get('paymentStep'), undefined)
+	})
+
+	it('reads the payment step as present once it is shown', async () => {
+		const { recorder, result } = await drive<boolean>('checkout-payment', ({ present }) =>
+			present('paymentStep', { visible: true, timeoutMs: 500 }),
+		)
+
+		assert.equal(result, true)
+		assert.equal(recorder.best().get('paymentStep')?.candidate, '#checkout-step-payment')
+	})
+
+	it('still counts a hidden element when visibility is not asked for', async () => {
+		// Checks such as the unavailable-payment count rely on this, so asking for
+		// visibility is a choice at the call and never the default.
+		const { recorder, result } = await drive<boolean>('checkout-shipping', ({ present }) =>
+			present('paymentStep', { timeoutMs: 500 }),
+		)
+
+		assert.equal(result, true)
+		assert.equal(recorder.best().get('paymentStep')?.index, 0)
+	})
+})
+
 describe('a failure reports what the page is saying', () => {
 	/** Drives a theme with no `messages` declared, so the quiet direction is real. */
 	const driveSilent = async (theme: string, body: Parameters<BrowserSurface['visit']>[1]) => {

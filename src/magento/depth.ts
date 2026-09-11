@@ -245,10 +245,10 @@ export const depthChecks = (
 						await fillCart(session, store)
 						await (await find('proceedToCheckout', { unique: true })).click()
 
-						// Checkout is one page that swaps steps, so what is asserted is that
-						// the step changed. Reading payment before shipping is answered would
-						// make reaching it prove nothing.
-						const early = await present('paymentStep', { timeoutMs: 5_000 })
+						// Checkout is one page that swaps steps and renders the payment step
+						// hidden from the start, so only a visible one counts. Seeing it before
+						// shipping is answered would make reaching it prove nothing.
+						const early = await present('paymentStep', { visible: true, timeoutMs: 5_000 })
 						record('payment before shipping', String(early))
 						if (early) {
 							throw new AssertionFailure(

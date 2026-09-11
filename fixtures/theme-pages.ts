@@ -5,7 +5,14 @@ import type { AddressInfo } from 'node:net'
  * Two storefronts that share no ids and no classes, and a third that has
  * drifted, because portability is not provable by reading a candidate list.
  */
-export type Theme = 'semantic' | 'themed' | 'drifted' | 'unrecognisable' | 'erroring'
+export type Theme =
+	| 'semantic'
+	| 'themed'
+	| 'drifted'
+	| 'unrecognisable'
+	| 'erroring'
+	| 'checkout-shipping'
+	| 'checkout-payment'
 
 const SEMANTIC = `<!doctype html><html><body>
   <h1>Search results</h1>
@@ -54,12 +61,30 @@ const ERRORING = `<!doctype html><html><body>
   <button id="product-addtocart-button">Add to Cart</button>
 </body></html>`
 
+// Luma's one-page checkout renders the payment step into the DOM from the start
+// and hides it, so every paymentStep candidate matches on the shipping step.
+const checkout = (paymentShown: boolean): string => `<!doctype html><html><body>
+  <ol class="opc-progress-bar"><li>Shipping</li><li>Review &amp; Payments</li></ol>
+  <ol id="checkoutSteps" class="opc">
+    <li id="shipping" class="checkout-shipping-address"${paymentShown ? ' style="display: none;"' : ''}>
+      <input id="customer-email" name="username" type="email">
+    </li>
+    <li id="payment" class="checkout-payment-method"${paymentShown ? '' : ' style="display: none;"'}>
+      <div id="checkout-step-payment" class="step-content">
+        <div class="payment-method-title"><label>Check / Money order</label></div>
+      </div>
+    </li>
+  </ol>
+</body></html>`
+
 const PAGES: Readonly<Record<Theme, string>> = {
 	semantic: SEMANTIC,
 	themed: THEMED,
 	drifted: DRIFTED,
 	unrecognisable: UNRECOGNISABLE,
 	erroring: ERRORING,
+	'checkout-shipping': checkout(false),
+	'checkout-payment': checkout(true),
 }
 
 export interface ThemeServer {

@@ -41,6 +41,7 @@ The probe walks the whole journey, reports which selector entries resolved and v
 ## The ideas worth knowing before you write
 
 - **A selector is an ordered candidate list, never one selector.** Semantic and ARIA first, the Magento convention next, the theme's own class last. Which candidate answered is recorded in `ledger/magento.drift.json`, so an entry falling toward the bottom of its list is visible before it stops resolving at all. Adding a selector means adding to a list in `src/magento/selectors.ts`, in that order.
+- **`present` means in the page, not on the screen.** Luma renders checkout steps and its "no payment method" block hidden, so an element can be present while the shopper sees nothing. When the check is about what the shopper sees, ask `present(entry, { visible: true })`.
 - **A catalogue fact isn't a constant.** A category path, a search term, a product with options — written into the source, they pin the harness to one store. They are captured by `drexbot baseline` into `baselines/`, and a check that needs one reports `blocked` and names the command until it exists.
 - **Assert the consequence, not the confirmation.** Placing an order is proved by finding it again through Orders and Returns, not by the success page: a page that names an order number is a page. A wish-list add waits for the item, not for the banner.
 - **A check that writes is never tried twice.** A timeout after an order is placed would otherwise be retried, and the second attempt places a second order.

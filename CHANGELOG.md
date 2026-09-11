@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+**`magento.depth.guest-checkout-reaches-payment` no longer fails a healthy checkout.** On a fresh Mage-OS 3.5 (Magento 2.4.9) store with Luma, the payment step is in the page from the moment checkout opens, hidden until shipping is answered. The check asked whether the step was there, not whether it was showing, so it failed with _the payment step was showing before shipping was answered_. A check can now ask `present(entry, { visible: true })`, which answers only with a candidate the shopper can see, and this check does. Every other entry resolves as it did, and a hidden element never records a winner in the drift ledger.
+
 **A browser check can no longer hang the run.** Against a store in developer mode, `magento.journey.product-page` opened a product while the category page was still loading its scripts, and then never finished closing its browser context. Playwright writes the network log before it closes the page, and that write waited for responses the navigation had cut off, which only give up when the page closes. The run sat there with no new line in its journal until somebody killed it. Pages are now closed before their context, and the check finishes in about three seconds.
 
 **Every browser step has a bound.** Clicks and navigations get 30 seconds unless a check asks for longer, stated rather than inherited. Calls Playwright never times out itself (counting matches, reading the page, saving the trace, closing) get 15 seconds, and fail as a `timeout` that names the step: _counting "pageTitle" (h1) timed out after 15s_.
