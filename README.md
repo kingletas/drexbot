@@ -74,7 +74,9 @@ drexbot baseline --target magento
 A category path and a search term are **facts about a catalogue**, not constants.
 Written into the source they pin the harness to one store, so the baseline is
 captured over GraphQL and read by the checks. Until it exists, the checks that
-need a catalogue report `blocked` and name the command.
+need a catalogue report `blocked` and name the command. A baseline belongs to the
+URL it was captured from, so a run against any other `--url` blocks the same way
+rather than asking one store for another store's paths.
 
 `baseline` is the one command the shared set doesn't have: a storefront is the
 only target whose checks need facts about a catalogue before they can ask for

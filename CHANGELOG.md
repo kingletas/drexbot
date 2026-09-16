@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+**Browser checks go to the store named by `--url`.** A check opened its first page at `--url`, then built every later address (the cart, checkout, the wishlist, the guest order lookup) from the URL saved in the store baseline. A run with `--url https://prod.test` and a baseline captured from `https://vanilla.test` added to cart on one store and went to checkout on the other, and failed there with a certificate error. Every address now comes from `--url`. A baseline captured from a different URL is set aside, because its category and product paths belong to that store, and the checks that need it report `blocked`: _the store baseline for "local" was captured from https://vanilla.test, not https://prod.test — run: drexbot baseline --target magento --url https://prod.test --env local_. With no baseline at all, the command they name now carries the run's URL and environment too.
+
 ## 0.1.3
 
 **Checkout no longer waits three minutes for an email field that is already showing.** Waiting for an entry watched the first element any of its candidates matched in page order, whether or not a shopper could see it. On a Luma checkout that is the hidden email input in the sign-in popup, so every checkout waited out its full 180 seconds before moving on, and a slow store pushed checks such as `magento.checkout.payment-step-offers-a-method` past their time limit with _could not find "checkoutEmail"_. The wait now ends as soon as any candidate is visible, and candidates are still tried in their listed order. Opening checkout to checking the email now takes about 5 seconds instead of about 215.

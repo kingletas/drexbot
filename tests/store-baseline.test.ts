@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { discoverStore, uncapturedStore } from '../src/magento/baseline.js'
+import {
+	catalogueFor,
+	discoverStore,
+	uncapturedStore,
+	type StoreBaseline,
+} from '../src/magento/baseline.js'
 import { HttpSurface } from 'harness-kernel'
 
 /** A GraphQL endpoint that answers the four questions discovery asks. */
@@ -142,5 +147,52 @@ describe('discovering what a store is', () => {
 	it('marks itself captured, which is what the checks read', async () => {
 		assert.equal((await discover()).captured, true)
 		assert.equal(uncapturedStore('http://x').captured, false)
+	})
+})
+
+describe('choosing the catalogue a run may use', () => {
+	const captured: StoreBaseline = {
+		captured: true,
+		capturedAt: '2026-09-16T00:00:00.000Z',
+		baseUrl: 'https://store-a.test',
+		storeCode: 'default',
+		currency: 'USD',
+		categoryPath: '/gear/bags.html',
+		categoryProducts: 14,
+		searchTerm: 'bag',
+		searchResults: 9,
+	}
+
+	it("navigates by the run's URL, not the one the baseline was captured from", () => {
+		// Every check builds its addresses from this, so a baseline written as
+		// https://store-a.test/ must not send a run for https://store-a.test elsewhere.
+		const store = catalogueFor(
+			{ ...captured, baseUrl: 'https://STORE-A.test/' },
+			'https://store-a.test',
+			'local',
+		)
+
+		assert.equal(store.captured, true)
+		assert.equal(store.baseUrl, 'https://store-a.test')
+		assert.equal(store.categoryPath, '/gear/bags.html')
+	})
+
+	it('sets aside a baseline captured from another store, and names the command for this one', () => {
+		const store = catalogueFor(captured, 'https://store-b.test', 'staging')
+
+		assert.equal(store.captured, false)
+		assert.equal(store.baseUrl, 'https://store-b.test')
+		assert.equal(
+			store.uncapturedBecause,
+			'the store baseline for "staging" was captured from https://store-a.test, not https://store-b.test' +
+				' — run: drexbot baseline --target magento --url https://store-b.test --env staging',
+		)
+	})
+
+	it('names the URL to capture when there is no baseline at all', () => {
+		const store = catalogueFor(undefined, 'https://store-b.test', 'local')
+
+		assert.equal(store.captured, false)
+		assert.match(store.uncapturedBecause ?? '', /--url https:\/\/store-b\.test --env local$/)
 	})
 })

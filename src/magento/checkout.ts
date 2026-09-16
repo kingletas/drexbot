@@ -1,7 +1,7 @@
 import type { CheckDefinition } from 'harness-kernel'
-import { AssertionFailure, NO_RETRY, PreconditionFailure } from 'harness-kernel'
+import { AssertionFailure, NO_RETRY } from 'harness-kernel'
 import type { BrowserSurface, PageSession } from '../surfaces/browser.js'
-import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { requireCatalogue, type StoreBaseline } from './baseline.js'
 import { answerShippingStep, fillCart, type Shopper } from './shopper.js'
 
 /** Magento writes an increment id of digits, and the success page prints it. */
@@ -18,7 +18,7 @@ export const checkoutChecks = (
 	const needs = ['browser'] as const
 
 	const guard = (): void => {
-		if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+		requireCatalogue(store)
 	}
 
 	/**

@@ -1,7 +1,7 @@
 import type { CheckDefinition } from 'harness-kernel'
-import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
+import { AssertionFailure } from 'harness-kernel'
 import type { BrowserSurface } from '../surfaces/browser.js'
-import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { requireCatalogue, type StoreBaseline } from './baseline.js'
 
 /**
  * What a shopper actually does, in a real browser because the thing tested is
@@ -18,7 +18,7 @@ export const journeyChecks = (
 		suite: 'journey',
 		needs: ['browser'],
 		async body({ record, measure, artefactDir, attach, signal }) {
-			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+			requireCatalogue(store)
 			const surface = await browser()
 
 			await surface.visit(
@@ -55,7 +55,7 @@ export const journeyChecks = (
 		suite: 'journey',
 		needs: ['browser'],
 		async body({ record, measure, artefactDir, attach, signal }) {
-			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+			requireCatalogue(store)
 			const surface = await browser()
 
 			await surface.visit(
@@ -99,7 +99,7 @@ export const journeyChecks = (
 		suite: 'journey',
 		needs: ['browser'],
 		async body({ record, artefactDir, attach, signal }) {
-			if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+			requireCatalogue(store)
 			const surface = await browser()
 
 			await surface.visit(

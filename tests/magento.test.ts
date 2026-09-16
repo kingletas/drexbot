@@ -8,7 +8,7 @@ import { preflightObservation, runChecks } from 'harness-kernel'
 import { summarize } from 'harness-kernel'
 import { magentoTarget } from '../src/magento/adapter.js'
 
-const against = async (defect: StoreDefect, suite = 'session-less') => {
+const against = async (defect: StoreDefect, suite = 'session-less', capturedFrom?: string) => {
 	const stub = await startStorefrontStub(defect)
 	try {
 		const target = magentoTarget({
@@ -19,7 +19,7 @@ const against = async (defect: StoreDefect, suite = 'session-less') => {
 			store: {
 				captured: true,
 				capturedAt: '2026-08-27T00:00:00.000Z',
-				baseUrl: stub.url,
+				baseUrl: capturedFrom ?? stub.url,
 				storeCode: 'default',
 				currency: 'USD',
 				categoryPath: '/women/tops-women.html',
@@ -90,6 +90,24 @@ describe('the storefront smoke suite', () => {
 		assert.ok(failedIds(observations).includes('magento.smoke.home'))
 		const home = observations.find(observation => observation.id === 'magento.smoke.home')
 		assert.match(home?.reason ?? '', /does not contain "cms-index-index"/)
+	})
+
+	it('blocks the catalogue pages when the baseline was captured from another store', async () => {
+		// Its paths belong to that store's catalogue, so asking this one for them
+		// would fail as though this store were broken.
+		const { observations } = await against('none', 'smoke', 'https://another-store.test')
+		const blocked = observations.filter(observation => observation.verdict === 'blocked')
+
+		assert.ok(blocked.length > 0)
+		for (const observation of blocked) {
+			assert.match(
+				observation.reason ?? '',
+				/captured from https:\/\/another-store\.test, not http:/,
+			)
+			assert.match(observation.reason ?? '', /run: drexbot baseline --target magento --url http:/)
+		}
+		const home = observations.find(observation => observation.id === 'magento.smoke.home')
+		assert.equal(home?.verdict, 'pass')
 	})
 })
 

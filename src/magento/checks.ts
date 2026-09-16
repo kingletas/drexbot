@@ -1,7 +1,7 @@
 import type { CheckDefinition } from 'harness-kernel'
-import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
+import { AssertionFailure } from 'harness-kernel'
 import type { HttpSurface } from 'harness-kernel'
-import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { requireCatalogue, type StoreBaseline } from './baseline.js'
 import { MUST_NOT_SERVE, REST_PROBES, storefrontPages } from './surfaces.js'
 
 /**
@@ -20,9 +20,7 @@ export const smokeChecks = (
 		async body({ measure, record }) {
 			// A page whose path is a fact about this store cannot be asked for
 			// until that fact is known.
-			if (page.needsCatalogue === true && !store.captured) {
-				throw new PreconditionFailure(NO_BASELINE)
-			}
+			if (page.needsCatalogue === true) requireCatalogue(store)
 
 			const response = await http.get(page.path)
 			measure({ name: 'response', value: response.durationMs, unit: 'ms', stage: page.path })

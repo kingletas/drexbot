@@ -1,7 +1,7 @@
 import type { CheckDefinition } from 'harness-kernel'
 import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
 import type { BrowserSurface, PageSession } from '../surfaces/browser.js'
-import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { requireCatalogue, type StoreBaseline } from './baseline.js'
 import { answerShippingStep, fillCart, openProduct, registerCustomer } from './shopper.js'
 
 /**
@@ -16,7 +16,7 @@ export const depthChecks = (
 	const needs = ['browser'] as const
 
 	const guard = (): void => {
-		if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+		requireCatalogue(store)
 	}
 
 	/** The names on the listing, in the order the page put them. */

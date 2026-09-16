@@ -10,6 +10,8 @@ import type { HttpSurface } from 'harness-kernel'
 export interface StoreBaseline {
 	/** False for the stand-in used before anything has been captured. */
 	readonly captured: boolean
+	/** Set only on the stand-in: why the checks cannot use a catalogue, and the command that fixes it. */
+	readonly uncapturedBecause?: string
 	readonly capturedAt: string
 	readonly baseUrl: string
 	readonly storeCode: string
@@ -166,16 +168,61 @@ export const saveStore = (path: string, baseline: StoreBaseline): void => {
 	writeFileSync(path, `${JSON.stringify(baseline, null, '\t')}\n`, 'utf8')
 }
 
-/** Named once, so every check that needs a catalogue asks for it the same way. */
-export const NO_BASELINE =
-	'no store baseline has been captured — run: drexbot baseline --target magento'
+const baselineCommand = (baseUrl: string, environment: string): string =>
+	`drexbot baseline --target magento --url ${baseUrl} --env ${environment}`
+
+/** Two URLs name the same store when they agree on everything but case and a trailing slash. */
+const sameStore = (left: string, right: string): boolean => {
+	const normalise = (url: string): string | undefined => {
+		try {
+			const parsed = new URL(url)
+			return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`
+		} catch {
+			return undefined
+		}
+	}
+	const normalised = normalise(left)
+	return normalised !== undefined && normalised === normalise(right)
+}
+
+/**
+ * The catalogue a run may use. A baseline captured from another store is set
+ * aside, because its paths would fail as though this store were broken.
+ */
+export const catalogueFor = (
+	baseline: StoreBaseline | undefined,
+	baseUrl: string,
+	environment: string,
+): StoreBaseline => {
+	if (baseline === undefined || !baseline.captured) {
+		return uncapturedStore(
+			baseUrl,
+			`no store baseline has been captured for "${environment}" — run: ${baselineCommand(baseUrl, environment)}`,
+		)
+	}
+	if (!sameStore(baseline.baseUrl, baseUrl)) {
+		return uncapturedStore(
+			baseUrl,
+			`the store baseline for "${environment}" was captured from ${baseline.baseUrl}, not ${baseUrl} — run: ${baselineCommand(baseUrl, environment)}`,
+		)
+	}
+	return { ...baseline, baseUrl }
+}
+
+/** Blocks a check that needs a catalogue when the run has none it can use. */
+export const requireCatalogue = (store: StoreBaseline): void => {
+	if (!store.captured) {
+		throw new PreconditionFailure(store.uncapturedBecause ?? 'no store baseline has been captured')
+	}
+}
 
 /**
  * The stand-in used before anything has been captured; its `captured` flag is
  * what the checks read, because a guessed path fails as though the store were broken.
  */
-export const uncapturedStore = (baseUrl: string): StoreBaseline => ({
+export const uncapturedStore = (baseUrl: string, because?: string): StoreBaseline => ({
 	captured: false,
+	...(because === undefined ? {} : { uncapturedBecause: because }),
 	capturedAt: 'never',
 	baseUrl,
 	storeCode: 'unknown',

@@ -1,7 +1,7 @@
 import type { CheckDefinition } from 'harness-kernel'
 import { AssertionFailure, PreconditionFailure } from 'harness-kernel'
 import type { BrowserSurface } from '../surfaces/browser.js'
-import { NO_BASELINE, type StoreBaseline } from './baseline.js'
+import { requireCatalogue, type StoreBaseline } from './baseline.js'
 import { chooseOptions, openProduct } from './shopper.js'
 
 /**
@@ -15,7 +15,7 @@ export const regressionChecks = (
 	const needs = ['browser'] as const
 
 	const guard = (): void => {
-		if (!store.captured) throw new PreconditionFailure(NO_BASELINE)
+		requireCatalogue(store)
 	}
 
 	return [

@@ -7,7 +7,7 @@ import { HttpSurface } from 'harness-kernel'
 import type { Target, TargetOptions } from 'harness-kernel'
 import { join } from 'node:path'
 import { MAGENTO_AREAS } from './areas.js'
-import { loadStore, uncapturedStore, type StoreBaseline } from './baseline.js'
+import { catalogueFor, loadStore, type StoreBaseline } from './baseline.js'
 import { MAGENTO_IMPACT } from './impact.js'
 import { probeStorefront } from './probe.js'
 import { sessionLessChecks, smokeChecks } from './checks.js'
@@ -73,10 +73,15 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 	const http = new HttpSurface(baseUrl, 30_000)
 	const recorder = options.recorder ?? new DriftRecorder()
 
-	/** What this store is, captured by `drexbot baseline`; absent until somebody runs it. */
-	const store =
+	const environment = options.environment ?? 'local'
+
+	/** What this store is, captured by `drexbot baseline`, and only when it was captured from this URL. */
+	const store = catalogueFor(
 		(options.store as StoreBaseline | undefined) ??
-		loadStore(join(WORKSPACE.baselines, `magento--${options.environment ?? 'local'}.store.json`))
+			loadStore(join(WORKSPACE.baselines, `magento--${environment}.store.json`)),
+		baseUrl,
+		environment,
+	)
 
 	// Started once and reused: launching Chromium per check costs more than the
 	// whole suite. The promise is memoised rather than the browser, so two checks
@@ -94,7 +99,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 
 	return {
 		name: 'magento',
-		environment: options.environment ?? 'local',
+		environment,
 		capabilities: capabilities(),
 
 		async preflight(): Promise<PreflightResult> {
@@ -139,23 +144,21 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 		impact: () => MAGENTO_IMPACT,
 		probe: () =>
 			probeStorefront(baseUrl, {
-				categoryPath: store?.categoryPath ?? '/',
-				searchTerm: store?.searchTerm ?? 'a',
+				categoryPath: store.captured ? store.categoryPath : '/',
+				searchTerm: store.captured ? store.searchTerm : 'a',
 			}),
 
 		suites(): ReadonlyMap<string, readonly CheckDefinition[]> {
 			// A suite that needs a catalogue is offered only when one is known. The
 			// checks are declared either way, so the sheet still shows the areas and
 			// says what is missing rather than silently losing rows.
-			const catalogue = store ?? uncapturedStore(baseUrl)
-
 			const suites: [string, readonly CheckDefinition[]][] = [
-				['smoke', smokeChecks(http, catalogue)],
+				['smoke', smokeChecks(http, store)],
 				['session-less', sessionLessChecks(http, adminPath)],
-				['journey', journeyChecks(browser, catalogue)],
-				['regression', regressionChecks(browser, catalogue)],
-				['depth', depthChecks(browser, catalogue)],
-				['checkout', checkoutChecks(browser, catalogue)],
+				['journey', journeyChecks(browser, store)],
+				['regression', regressionChecks(browser, store)],
+				['depth', depthChecks(browser, store)],
+				['checkout', checkoutChecks(browser, store)],
 			]
 			return new Map(suites.map(([suite, checks]) => [suite, limited(suite, checks)]))
 		},
