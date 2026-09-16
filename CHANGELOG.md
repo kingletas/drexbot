@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
 
 **Browser checks go to the store named by `--url`.** A check opened its first page at `--url`, then built every later address (the cart, checkout, the wishlist, the guest order lookup) from the URL saved in the store baseline. A run with `--url https://prod.test` and a baseline captured from `https://vanilla.test` added to cart on one store and went to checkout on the other, and failed there with a certificate error. Every address now comes from `--url`. A baseline captured from a different URL is set aside, because its category and product paths belong to that store, and the checks that need it report `blocked`: _the store baseline for "local" was captured from https://vanilla.test, not https://prod.test — run: drexbot baseline --target magento --url https://prod.test --env local_. With no baseline at all, the command they name now carries the run's URL and environment too.
 
