@@ -122,17 +122,33 @@ describe('describeUnreachable', () => {
 	it('treats localhost, loopback and development suffixes as local', () => {
 		for (const baseUrl of [
 			'https://localhost:8443',
+			'https://localhost.',
 			'https://127.0.0.1',
 			'https://[::1]',
 			'https://shop.localhost',
 			'https://Vanilla-Magento.TEST',
+			'https://store.test.',
 			'https://mac.local',
 		]) {
-			const problem = describeUnreachable(fetchFailure('UNABLE_TO_VERIFY_LEAF_SIGNATURE'), {
+			const problem = describeUnreachable(fetchFailure('DEPTH_ZERO_SELF_SIGNED_CERT'), {
 				baseUrl,
 				extraCaCerts: undefined,
 			})
-			assert.match(problem, /NODE_EXTRA_CA_CERTS/, baseUrl)
+			assert.match(problem, /set NODE_EXTRA_CA_CERTS to the root certificate/, baseUrl)
+		}
+	})
+
+	it('does not mistake a public name that only looks local', () => {
+		for (const baseUrl of [
+			'https://127.example.com',
+			'https://evil.test.example.com',
+			'https://shop.local.example.com',
+		]) {
+			const problem = describeUnreachable(fetchFailure('DEPTH_ZERO_SELF_SIGNED_CERT'), {
+				baseUrl,
+				extraCaCerts: undefined,
+			})
+			assert.equal(problem, plain, baseUrl)
 		}
 	})
 
@@ -144,26 +160,37 @@ describe('describeUnreachable', () => {
 
 		assert.match(
 			problem,
-			/NODE_EXTRA_CA_CERTS is set to \/roots\/extra-ca\.pem, but that file does not hold the root/,
+			/NODE_EXTRA_CA_CERTS is set to \/roots\/extra-ca\.pem, but it does not give Node the root/,
 		)
 	})
 
-	it('never tells a public store to trust a root, and names a missing intermediate instead', () => {
+	it('names a missing intermediate on a public store, and a root only for a TLS proxy', () => {
 		for (const code of [
 			'UNABLE_TO_GET_ISSUER_CERT',
 			'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
 			'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
 		]) {
 			const problem = describeUnreachable(fetchFailure(code), production)
-			assert.doesNotMatch(problem, /NODE_EXTRA_CA_CERTS/, code)
 			assert.match(problem, /may not be sending its intermediate certificate/, code)
+			assert.match(problem, /through a proxy that inspects TLS, set NODE_EXTRA_CA_CERTS/, code)
+			assert.doesNotMatch(problem, /root certificate that issued this store/, code)
 		}
 	})
 
+	it('names only the proxy case for a public chain ending in an unknown root', () => {
+		const problem = describeUnreachable(fetchFailure('SELF_SIGNED_CERT_IN_CHAIN'), production)
+
+		assert.equal(
+			problem,
+			`${plain}. If this machine reaches the store through a proxy that inspects TLS, set NODE_EXTRA_CA_CERTS to that proxy's root certificate.`,
+		)
+	})
+
 	it('adds nothing to a self-signed certificate on a public store', () => {
-		for (const code of ['DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN']) {
-			assert.equal(describeUnreachable(fetchFailure(code), production), plain, code)
-		}
+		assert.equal(
+			describeUnreachable(fetchFailure('DEPTH_ZERO_SELF_SIGNED_CERT'), production),
+			plain,
+		)
 	})
 
 	it('suggests nothing when trusting a root would not help', () => {

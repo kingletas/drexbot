@@ -58,6 +58,10 @@ write_bundle() {
 	mkdir -p "$dir" 2>/dev/null || return 1
 	[[ -O "$dir" ]] || return 1
 	chmod 700 "$dir" 2>/dev/null || return 1
+	# mv follows a symlink to a directory, so anything left here that is not a plain file goes first.
+	if [[ -L "${dir}/extra-ca.pem" || (-e "${dir}/extra-ca.pem" && ! -f "${dir}/extra-ca.pem") ]]; then
+		rm -f "${dir}/extra-ca.pem" 2>/dev/null || return 1
+	fi
 
 	tmp=$(mktemp "${dir}/extra-ca.XXXXXX" 2>/dev/null) || return 1
 	if ! print_roots >"$tmp" || ! mv -f "$tmp" "${dir}/extra-ca.pem"; then

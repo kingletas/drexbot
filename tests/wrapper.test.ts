@@ -3,12 +3,14 @@ import { spawnSync } from 'node:child_process'
 import {
 	chmodSync,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	rmSync,
 	statSync,
+	symlinkSync,
 	writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -147,6 +149,31 @@ describe('the drexbot wrapper', () => {
 
 		expectRoots(run(), { mkcert, others: [warden] })
 		assert.equal(statSync(shared).mode & 0o777, 0o700)
+	})
+
+	it('finds the mkcert root under XDG_DATA_HOME', () => {
+		const mkcert = place('data/mkcert/rootCA.pem', pem('mkcert'))
+
+		expectRoots(run({ XDG_DATA_HOME: join(home, 'data') }), { mkcert })
+	})
+
+	it('finds the mkcert root where macOS keeps it', () => {
+		const mkcert = place('Library/Application Support/mkcert/rootCA.pem', pem('mkcert'))
+
+		expectRoots(run(), { mkcert })
+	})
+
+	it('replaces a symlink left where the bundle goes rather than writing through it', () => {
+		const mkcert = place('.local/share/mkcert/rootCA.pem', pem('mkcert'))
+		const warden = place('.warden/ssl/rootca/certs/ca.cert.pem', pem('warden'))
+		const elsewhere = join(home, 'someone-elses-directory')
+		mkdirSync(elsewhere)
+		mkdirSync(join(home, 'cache', 'drexbot'), { recursive: true })
+		symlinkSync(elsewhere, join(home, 'cache', 'drexbot', 'extra-ca.pem'))
+
+		expectRoots(run(), { mkcert, others: [warden] })
+		assert.equal(lstatSync(join(home, 'cache', 'drexbot', 'extra-ca.pem')).isFile(), true)
+		assert.deepEqual(readdirSync(elsewhere), [])
 	})
 
 	it('leaves NODE_EXTRA_CA_CERTS alone when it is already set', () => {
