@@ -22,8 +22,13 @@ $(NODE_MODULES): package.json
 	@touch $(NODE_MODULES)
 
 .PHONY: setup
-setup: $(NODE_MODULES) ## Install dependencies and a browser
+setup: build ## Install dependencies and a browser, then check the browser starts
 	npx playwright install chromium
+	./bin/drexbot browser
+
+.PHONY: browser-deps
+browser-deps: $(NODE_MODULES) ## Install the system libraries Chromium needs on Linux (asks for sudo)
+	npx playwright install-deps chromium
 
 .PHONY: build
 build: $(NODE_MODULES) ## Compile into dist/

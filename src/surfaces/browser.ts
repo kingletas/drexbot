@@ -1,8 +1,9 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright'
+import { type Browser, type BrowserContext, type Locator, type Page } from 'playwright'
 import type { DriftRecorder } from 'harness-kernel'
-import { AssertionFailure, TransportFailure } from 'harness-kernel'
+import { AssertionFailure } from 'harness-kernel'
+import { launchChromium } from './browser-launch.js'
 
 /** An ordered list of ways to find one thing, most portable first. */
 export type Candidates = readonly string[]
@@ -211,14 +212,8 @@ export class BrowserSurface {
 	}
 
 	static async launch(options: BrowserOptions): Promise<BrowserSurface> {
-		try {
-			const browser = await chromium.launch({ headless: options.headless ?? true })
-			return new BrowserSurface(browser, options)
-		} catch (cause) {
-			throw new TransportFailure(
-				`could not start a browser: ${cause instanceof Error ? cause.message : String(cause)}`,
-			)
-		}
+		const browser = await launchChromium(options.headless ?? true)
+		return new BrowserSurface(browser, options)
 	}
 
 	/**

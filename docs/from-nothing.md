@@ -65,7 +65,15 @@ git clone https://github.com/kingletas/drexbot && cd drexbot
 make setup
 ```
 
-This fetches the dependencies and the one browser it drives, Chromium. It downloads its own copy rather than using the browser you already have, so a check behaves the same on your laptop as it does anywhere else.
+This fetches the dependencies and the one browser it drives, Chromium. It downloads its own copy rather than using the browser you already have, so a check behaves the same on your laptop as it does anywhere else. Last, it starts that Chromium once to make sure it runs.
+
+On Linux, including WSL, Chromium also needs some system libraries, and a fresh machine often lacks them. If so, `make setup` stops and tells you. Install them, then run `make setup` again:
+
+```bash
+make browser-deps
+```
+
+This one asks for your `sudo` password, so it's a separate step rather than part of `make setup`.
 
 ```bash
 make install

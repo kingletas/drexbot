@@ -137,6 +137,7 @@ Three things fall out of that shape:
 | `src/magento/baseline.ts`                                                | What this store is, and the stand-in used before anyone has asked                |
 | `src/magento/shopper.ts`                                                 | The things every journey does: open a product, choose its options, fill the cart |
 | `src/surfaces/browser.ts`                                                | Chromium, the candidate resolution, and reading the page's own error banner      |
+| `src/surfaces/browser-launch.ts`                                         | Starting Chromium, and naming a missing library or browser as a setup problem    |
 | `src/workspace.ts`                                                       | The one place in the package that counts its own depth                           |
 | `fixtures/`                                                              | The storefront stub and its theme pages. Every check is proved against these     |
 

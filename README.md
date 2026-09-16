@@ -20,7 +20,7 @@ storefront.
 
 ## Installing it
 
-Node 20.19 or newer. Not on npm — clone it, and `make setup` fetches the dependencies and the one browser it drives:
+Node 20.19 or newer. Not on npm — clone it, and `make setup` fetches the dependencies and the one browser it drives, then checks that browser starts. On Linux, if it can't, `make browser-deps` installs what it needs:
 
 ```bash
 git clone https://github.com/kingletas/drexbot && cd drexbot && make setup
