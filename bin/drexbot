@@ -27,32 +27,67 @@ done
 
 here=$(cd "$(dirname "$source")" && pwd)
 
-if [[ -z "${NODE_EXTRA_CA_CERTS:-}" ]]; then
-	roots=()
-	for ca in \
-		"${HOME}/.local/share/mkcert/rootCA.pem" \
-		"/usr/local/share/ca-certificates/mkcert"*.crt \
-		"${WARDEN_HOME_DIR:-${HOME}/.warden}/ssl/rootca/certs/ca.cert.pem" \
-		"${DEN_HOME_DIR:-${HOME}/.den}/ssl/rootca/certs/ca.cert.pem"; do
-		if [[ -r "$ca" ]]; then
-			roots+=("$ca")
-		fi
-	done
+roots=()
 
-	# Node reads one file, so several roots are joined into one it can read.
+# Keeps a readable root unless the same certificate is already kept, as mkcert installs one copy per store.
+add_root() {
+	local kept
+	[[ -r "$1" ]] || return 0
+	if ((${#roots[@]} > 0)); then
+		for kept in "${roots[@]}"; do
+			if cmp -s "$kept" "$1"; then
+				return 0
+			fi
+		done
+	fi
+	roots+=("$1")
+}
+
+# Prints every root with a newline after each, so a file missing its last one cannot merge two PEM blocks.
+print_roots() {
+	local ca
+	for ca in "${roots[@]}"; do
+		cat "$ca" || return 1
+		echo
+	done
+}
+
+# Joins the roots into one file and prints its path, in a directory only this user can write.
+write_bundle() {
+	local dir="${XDG_CACHE_HOME:-${HOME}/.cache}/drexbot" tmp
+	mkdir -p "$dir" 2>/dev/null || return 1
+	[[ -O "$dir" ]] || return 1
+	chmod 700 "$dir" 2>/dev/null || return 1
+
+	tmp=$(mktemp "${dir}/extra-ca.XXXXXX" 2>/dev/null) || return 1
+	if ! print_roots >"$tmp" || ! mv -f "$tmp" "${dir}/extra-ca.pem"; then
+		rm -f "$tmp"
+		return 1
+	fi
+	printf '%s\n' "${dir}/extra-ca.pem"
+}
+
+if [[ -z "${NODE_EXTRA_CA_CERTS:-}" ]]; then
+	if [[ -n "${CAROOT:-}" ]]; then
+		add_root "${CAROOT}/rootCA.pem"
+	fi
+	add_root "${XDG_DATA_HOME:-${HOME}/.local/share}/mkcert/rootCA.pem"
+	add_root "${HOME}/Library/Application Support/mkcert/rootCA.pem"
+	for ca in /usr/local/share/ca-certificates/mkcert*.crt; do
+		add_root "$ca"
+	done
+	add_root "${WARDEN_HOME_DIR:-${HOME}/.warden}/ssl/rootca/certs/ca.cert.pem"
+	add_root "${DEN_HOME_DIR:-${HOME}/.den}/ssl/rootca/certs/ca.cert.pem"
+
+	# Node reads one file, so several roots are joined; if that cannot be written, the first still helps.
 	if ((${#roots[@]} == 1)); then
 		export NODE_EXTRA_CA_CERTS="${roots[0]}"
 	elif ((${#roots[@]} > 1)); then
-		bundle_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/drexbot"
-		mkdir -p "$bundle_dir"
-		bundle=$(mktemp "${bundle_dir}/extra-ca.XXXXXX")
-		# A newline after each root, so a file missing its last one cannot merge two PEM blocks.
-		for ca in "${roots[@]}"; do
-			cat "$ca"
-			echo
-		done >"$bundle"
-		mv -f "$bundle" "${bundle_dir}/extra-ca.pem"
-		export NODE_EXTRA_CA_CERTS="${bundle_dir}/extra-ca.pem"
+		if bundle=$(write_bundle); then
+			export NODE_EXTRA_CA_CERTS="$bundle"
+		else
+			export NODE_EXTRA_CA_CERTS="${roots[0]}"
+		fi
 	fi
 fi
 

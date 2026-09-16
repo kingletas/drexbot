@@ -19,10 +19,17 @@ const listen = (server: Server): Promise<number> =>
 const close = (server: Server): Promise<void> =>
 	new Promise(resolve => server.close(() => resolve()))
 
+/** Node reads NODE_EXTRA_CA_CERTS only at startup, so clearing it here changes the hint and nothing else. */
 const problemAt = async (baseUrl: string): Promise<string> => {
-	const preflight = await magentoTarget({ baseUrl, environment: 'stub', store: {} }).preflight()
-	assert.equal(preflight.reachable, false)
-	return preflight.problem ?? ''
+	const extraCaCerts = process.env['NODE_EXTRA_CA_CERTS']
+	delete process.env['NODE_EXTRA_CA_CERTS']
+	try {
+		const preflight = await magentoTarget({ baseUrl, environment: 'stub', store: {} }).preflight()
+		assert.equal(preflight.reachable, false)
+		return preflight.problem ?? ''
+	} finally {
+		if (extraCaCerts !== undefined) process.env['NODE_EXTRA_CA_CERTS'] = extraCaCerts
+	}
 }
 
 /** A certificate made for this run only, so no private key is ever committed. */
@@ -90,37 +97,96 @@ describe('preflight against a store Node cannot reach', () => {
 
 describe('describeUnreachable', () => {
 	const fetchFailure = (code: string): Error =>
-		new Error('GET https://store.test/magento_version: fetch failed', {
+		new Error('GET https://store.example/magento_version: fetch failed', {
 			cause: new TypeError('fetch failed', {
 				cause: Object.assign(new Error('certificate problem'), { code }),
 			}),
 		})
 
-	it('suggests a root for every code that trusting a root fixes', () => {
+	const local = { baseUrl: 'https://store.test', extraCaCerts: undefined }
+	const production = { baseUrl: 'https://store.example', extraCaCerts: undefined }
+	const plain = 'GET https://store.example/magento_version: fetch failed'
+
+	it('suggests a root on a local store for every code that trusting a root fixes', () => {
 		for (const code of [
+			'DEPTH_ZERO_SELF_SIGNED_CERT',
 			'SELF_SIGNED_CERT_IN_CHAIN',
 			'UNABLE_TO_GET_ISSUER_CERT',
 			'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
 			'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
 		]) {
-			assert.match(describeUnreachable(fetchFailure(code)), /NODE_EXTRA_CA_CERTS/, code)
+			assert.match(describeUnreachable(fetchFailure(code), local), /set NODE_EXTRA_CA_CERTS/, code)
+		}
+	})
+
+	it('treats localhost, loopback and development suffixes as local', () => {
+		for (const baseUrl of [
+			'https://localhost:8443',
+			'https://127.0.0.1',
+			'https://[::1]',
+			'https://shop.localhost',
+			'https://Vanilla-Magento.TEST',
+			'https://mac.local',
+		]) {
+			const problem = describeUnreachable(fetchFailure('UNABLE_TO_VERIFY_LEAF_SIGNATURE'), {
+				baseUrl,
+				extraCaCerts: undefined,
+			})
+			assert.match(problem, /NODE_EXTRA_CA_CERTS/, baseUrl)
+		}
+	})
+
+	it('names the file already in use when NODE_EXTRA_CA_CERTS is set', () => {
+		const problem = describeUnreachable(fetchFailure('UNABLE_TO_VERIFY_LEAF_SIGNATURE'), {
+			...local,
+			extraCaCerts: '/roots/extra-ca.pem',
+		})
+
+		assert.match(
+			problem,
+			/NODE_EXTRA_CA_CERTS is set to \/roots\/extra-ca\.pem, but that file does not hold the root/,
+		)
+	})
+
+	it('never tells a public store to trust a root, and names a missing intermediate instead', () => {
+		for (const code of [
+			'UNABLE_TO_GET_ISSUER_CERT',
+			'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+			'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+		]) {
+			const problem = describeUnreachable(fetchFailure(code), production)
+			assert.doesNotMatch(problem, /NODE_EXTRA_CA_CERTS/, code)
+			assert.match(problem, /may not be sending its intermediate certificate/, code)
+		}
+	})
+
+	it('adds nothing to a self-signed certificate on a public store', () => {
+		for (const code of ['DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN']) {
+			assert.equal(describeUnreachable(fetchFailure(code), production), plain, code)
 		}
 	})
 
 	it('suggests nothing when trusting a root would not help', () => {
-		for (const code of ['CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'ENOTFOUND']) {
-			assert.equal(
-				describeUnreachable(fetchFailure(code)),
-				'GET https://store.test/magento_version: fetch failed',
-				code,
-			)
+		for (const context of [local, production]) {
+			for (const code of ['CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'ENOTFOUND']) {
+				assert.equal(describeUnreachable(fetchFailure(code), context), plain, code)
+			}
 		}
+	})
+
+	it('treats a base URL it cannot parse as public', () => {
+		const problem = describeUnreachable(fetchFailure('DEPTH_ZERO_SELF_SIGNED_CERT'), {
+			baseUrl: 'not a url',
+			extraCaCerts: undefined,
+		})
+
+		assert.equal(problem, plain)
 	})
 
 	it('survives a cause chain that loops back on itself', () => {
 		const looped = new Error('fetch failed')
 		looped.cause = looped
 
-		assert.equal(describeUnreachable(looped), 'fetch failed')
+		assert.equal(describeUnreachable(looped, local), 'fetch failed')
 	})
 })

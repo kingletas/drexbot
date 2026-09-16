@@ -65,9 +65,16 @@ Node bundles its own certificate list and ignores the system trust store, so a d
 export NODE_EXTRA_CA_CERTS=$HOME/.local/share/mkcert/rootCA.pem
 ```
 
-The `drexbot` wrapper does this for you when you haven't set the variable yourself. It looks for the mkcert root, and for the root Warden or Den creates when it's installed (`~/.warden/ssl/rootca/certs/ca.cert.pem`, or `~/.den/...`, or under `WARDEN_HOME_DIR` or `DEN_HOME_DIR` when those are set). Node reads only one file, so when it finds more than one root it joins them into `drexbot/extra-ca.pem` under `$XDG_CACHE_HOME`, or `~/.cache` when that is unset.
+The `drexbot` wrapper does this for you when you haven't set the variable yourself. It looks for these roots:
 
-When the store's certificate isn't trusted, preflight blocks the run and the reason names both the certificate error and this variable. A self-signed certificate is its own root, so point the variable at the certificate file itself. If mkcert runs on Windows and drexbot runs in WSL, run `mkcert -CAROOT` on Windows to find the folder, and reach it from WSL under `/mnt/c/`.
+- **mkcert:** `$CAROOT` when it is set, `~/.local/share/mkcert` (or the same folder under `$XDG_DATA_HOME`), `~/Library/Application Support/mkcert` on macOS, and the copies `mkcert -install` puts in `/usr/local/share/ca-certificates`.
+- **Warden and Den:** the root each creates on install, `~/.warden/ssl/rootca/certs/ca.cert.pem` or `~/.den/ssl/rootca/certs/ca.cert.pem`, under `WARDEN_HOME_DIR` or `DEN_HOME_DIR` when those are set.
+
+The same certificate found in two places counts once. Node reads only one file, so when more than one root is found they are joined into `drexbot/extra-ca.pem` under `$XDG_CACHE_HOME`, or `~/.cache` when that is unset. If that file can't be written, the first root is used on its own. The roots are trusted for every run, whatever store it points at, because the wrapper doesn't read the store's address.
+
+When Node doesn't know the root that signed a local store's certificate, preflight blocks the run and names the certificate error and this variable. A self-signed certificate is its own root, so point the variable at the certificate file itself. If the variable is already set, the message names the file and says it holds the wrong root. If mkcert runs on Windows and drexbot runs in WSL, run `mkcert -CAROOT` on Windows to find the folder, and reach it from WSL under `/mnt/c/`.
+
+A store counts as local when its hostname is `localhost`, a loopback address, or ends in `.test`, `.localhost` or `.local`. Against any other store, the same errors usually mean the server isn't sending its intermediate certificate, so preflight says that instead. Trusting a root there would hide a real fault in the store. An expired certificate or a hostname mismatch is named with no hint, local or not.
 
 ## The files it keeps
 

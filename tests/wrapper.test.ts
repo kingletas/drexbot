@@ -8,6 +8,7 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -114,6 +115,38 @@ describe('the drexbot wrapper', () => {
 			readFileSync(output, 'utf8'),
 			/-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nden/,
 		)
+	})
+
+	it('finds the mkcert root at CAROOT', () => {
+		const mkcert = place('moved-caroot/rootCA.pem', pem('mkcert'))
+
+		expectRoots(run({ CAROOT: join(home, 'moved-caroot') }), { mkcert })
+	})
+
+	it('keeps one copy of a root found in two places', () => {
+		const warden = place('.warden/ssl/rootca/certs/ca.cert.pem', pem('same'))
+		place('.den/ssl/rootca/certs/ca.cert.pem', pem('same'))
+
+		expectRoots(run(), { others: [warden] })
+	})
+
+	it('falls back to the first root when the cache cannot be written', () => {
+		const mkcert = place('.local/share/mkcert/rootCA.pem', pem('mkcert'))
+		place('.warden/ssl/rootca/certs/ca.cert.pem', pem('warden'))
+		const notADirectory = place('cache-is-a-file', '')
+
+		assert.equal(run({ XDG_CACHE_HOME: notADirectory }), mkcert)
+	})
+
+	it('closes a cache directory other users could write to before using it', () => {
+		const mkcert = place('.local/share/mkcert/rootCA.pem', pem('mkcert'))
+		const warden = place('.warden/ssl/rootca/certs/ca.cert.pem', pem('warden'))
+		const shared = join(home, 'cache', 'drexbot')
+		mkdirSync(shared, { recursive: true })
+		chmodSync(shared, 0o777)
+
+		expectRoots(run(), { mkcert, others: [warden] })
+		assert.equal(statSync(shared).mode & 0o777, 0o700)
 	})
 
 	it('leaves NODE_EXTRA_CA_CERTS alone when it is already set', () => {

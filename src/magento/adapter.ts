@@ -123,7 +123,10 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 					reachable: false,
 					build: 'unknown',
 					capabilities: capabilities(),
-					problem: describeUnreachable(cause),
+					problem: describeUnreachable(cause, {
+						baseUrl,
+						extraCaCerts: process.env['NODE_EXTRA_CA_CERTS'],
+					}),
 				}
 			}
 		},

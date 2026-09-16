@@ -34,7 +34,7 @@
 		"format:check": "prettier --check ."
 	},
 	"dependencies": {
-		"harness-kernel": "git+https://github.com/kingletas/harness-kernel.git#4c273a0b99b9e6c18f7678c52d9d4538f9290d9c",
+		"harness-kernel": "git+https://github.com/kingletas/harness-kernel.git#c16aaf2b7439533f37747a47de99a683cda8398c",
 		"playwright": "^1.62.1"
 	},
 	"devDependencies": {
