@@ -409,11 +409,13 @@ export class BrowserSurface {
 				? page.locator(candidate).filter({ visible: true })
 				: page.locator(candidate)
 
-		// Wait once for any candidate, so auto-waiting still applies, then probe in
-		// order — Playwright resolves a union in DOM order, which is not priority.
+		// Wait once for any candidate to be visible, then probe in priority order.
+		// Each branch is filtered before the union because a union resolves in DOM
+		// order, so an unfiltered first() can be a hidden element that never shows.
+		const shown = (candidate: string): Locator => page.locator(candidate).filter({ visible: true })
 		const union = candidates
 			.slice(1)
-			.reduce((all, candidate) => all.or(locate(candidate)), locate(candidates[0] as string))
+			.reduce((all, candidate) => all.or(shown(candidate)), shown(candidates[0] as string))
 
 		await union
 			.first()

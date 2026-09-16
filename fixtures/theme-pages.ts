@@ -13,6 +13,8 @@ export type Theme =
 	| 'erroring'
 	| 'checkout-shipping'
 	| 'checkout-payment'
+	| 'checkout-login-first'
+	| 'checkout-email-late'
 
 const SEMANTIC = `<!doctype html><html><body>
   <h1>Search results</h1>
@@ -77,6 +79,25 @@ const checkout = (paymentShown: boolean): string => `<!doctype html><html><body>
   </ol>
 </body></html>`
 
+// Luma renders the authentication popup's hidden login input ahead of the
+// checkout form, so the first element any checkoutEmail candidate matches in
+// DOM order is one the shopper can never see.
+const LOGIN_POPUP = `<div class="block-authentication" style="display: none;">
+    <input id="login-email" name="username" type="email">
+  </div>`
+
+const checkoutLoginFirst = (revealAfterMs?: number): string => `<!doctype html><html><body>
+  ${LOGIN_POPUP}
+  <ol id="checkoutSteps" class="opc"><li id="shipping"></li></ol>
+  <script>
+    const reveal = () => {
+      document.getElementById('shipping').innerHTML =
+        '<input id="customer-email" name="username" type="email">'
+    }
+    ${revealAfterMs === undefined ? 'reveal()' : `setTimeout(reveal, ${revealAfterMs})`}
+  </script>
+</body></html>`
+
 const PAGES: Readonly<Record<Theme, string>> = {
 	semantic: SEMANTIC,
 	themed: THEMED,
@@ -85,6 +106,8 @@ const PAGES: Readonly<Record<Theme, string>> = {
 	erroring: ERRORING,
 	'checkout-shipping': checkout(false),
 	'checkout-payment': checkout(true),
+	'checkout-login-first': checkoutLoginFirst(),
+	'checkout-email-late': checkoutLoginFirst(1_000),
 }
 
 export interface ThemeServer {

@@ -223,3 +223,31 @@ describe('a failure reports what the page is saying', () => {
 		assert.deepEqual([...recorder.best().keys()], [])
 	})
 })
+
+describe('waiting for an entry whose first match in the page is hidden', () => {
+	it('returns as soon as a later candidate is visible', async () => {
+		// Luma's hidden login input comes first in the DOM; waiting on it held
+		// every checkout for the whole timeout before the email field was used.
+		const { recorder, result } = await drive<number>('checkout-login-first', async ({ find }) => {
+			const started = performance.now()
+			await find('checkoutEmail', { timeoutMs: 20_000 })
+			return performance.now() - started
+		})
+
+		assert.ok(result < 5_000, `waited ${Math.round(result)}ms for a field that was already showing`)
+		assert.equal(recorder.best().get('checkoutEmail')?.candidate, '#customer-email')
+	})
+
+	it('still waits for the visible field instead of settling for the hidden one', async () => {
+		// The counter-direction: a wait that returned at once would count the
+		// hidden login input under the second candidate and record false drift.
+		const { recorder, result } = await drive<number>('checkout-email-late', async ({ find }) => {
+			const started = performance.now()
+			await find('checkoutEmail', { timeoutMs: 20_000 })
+			return performance.now() - started
+		})
+
+		assert.ok(result >= 900, `returned after ${Math.round(result)}ms, before the field was shown`)
+		assert.equal(recorder.best().get('checkoutEmail')?.index, 0)
+	})
+})
