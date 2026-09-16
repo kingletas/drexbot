@@ -36,7 +36,7 @@ Against a real store, start here rather than with a run:
 drexbot probe --target magento
 ```
 
-The probe walks the whole journey, reports which selector entries resolved and via which candidate, and judges nothing — it exits 0 even when nothing resolves, because a probe that failed would be a gate, and a gate isn't what you run first.
+The probe walks the whole journey, reports which selector entries resolved and via which candidate, and judges nothing — it exits 0 even when nothing resolves, because a probe that failed would be a gate, and a gate isn't what you run first. It exits 1 only when it can't run at all, such as when Chromium won't start, and says why.
 
 ## The ideas worth knowing before you write
 

@@ -411,7 +411,7 @@ The probe walks the whole journey and tells you what it could find, and which na
 
 That's deliberate. A probe that failed would be a gate, and a gate isn't what you want the first time you point this at a store. Run it to find out whether the harness can drive the site, before you ask it for a verdict.
 
-Against a store that isn't there, it says so and still exits 0:
+It exits 1 only when it can't run at all, such as when Chromium won't start on this machine, and it prints one line saying why. Against a store that isn't there, it says so and still exits 0:
 
 ```text
   magento — https://127.0.0.1:9999

@@ -275,6 +275,6 @@ While a run is in flight it holds a lock under `results/.locks`, so a schedule c
 
 **A dead store gives you one sentence, not forty.** After three failures to reach it with nothing getting through in between, the rest of the run reports `blocked` immediately rather than each check timing out on its own.
 
-**The probe always exits 0.** Even when nothing resolves. It's the thing you run to find out whether a verdict is worth asking for.
+**The probe exits 0 whatever it finds.** Even when nothing resolves, or the store isn't there. It's the thing you run to find out whether a verdict is worth asking for. It exits 1 only when it can't run at all, such as when Chromium won't start, and it says why in one line.
 
 **Timings aren't committed and the ledgers are.** A measurement is a fact about the machine that took it, so a laptop's history judging a CI runner's numbers would report a regression that's only a change of hardware. What the store refuses, what is quarantined and how selectors have drifted are facts about the software, identical everywhere, and those go under review.

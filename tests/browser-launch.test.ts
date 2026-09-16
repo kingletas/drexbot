@@ -169,4 +169,23 @@ describe('a browser that cannot start', () => {
 			assert.equal(result.stdout, 'drexbot: Chromium starts on this machine\n')
 		})
 	})
+
+	it('drexbot probe names why it could not run and exits 1, without a stack trace', () => {
+		const result = spawnSync('bash', [WRAPPER, 'probe', '--target', 'magento'], {
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				PLAYWRIGHT_BROWSERS_PATH: scratch,
+				MAGENTO_URL: 'https://127.0.0.1:9',
+			},
+			timeout: 60_000,
+		})
+
+		assert.equal(result.status, 1, result.stdout)
+		assert.match(
+			result.stderr,
+			/^drexbot: could not probe magento — Chromium is not installed where this version of Playwright looks for it/,
+		)
+		assert.equal(result.stderr.trim().split('\n').length, 1, result.stderr)
+	})
 })

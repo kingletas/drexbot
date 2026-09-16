@@ -75,7 +75,7 @@ Before asking for a verdict, ask whether the suite can even drive the site:
 drexbot probe --target magento
 ```
 
-The probe tells you what it could find, and which name on each list found it. It **judges nothing** — it exits 0 even when it finds nothing. A probe that failed would be a gate, and a gate isn't what you run first.
+The probe tells you what it could find, and which name on each list found it. It **judges nothing** — it exits 0 even when it finds nothing. A probe that failed would be a gate, and a gate isn't what you run first. It exits 1 only when it can't run at all, such as when Chromium won't start, and it says why.
 
 ## Capture the catalogue
 
