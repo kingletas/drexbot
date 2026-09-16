@@ -65,7 +65,9 @@ Node bundles its own certificate list and ignores the system trust store, so a d
 export NODE_EXTRA_CA_CERTS=$HOME/.local/share/mkcert/rootCA.pem
 ```
 
-The `drexbot` wrapper does this for you when it finds an mkcert root and you haven't set the variable yourself.
+The `drexbot` wrapper does this for you when you haven't set the variable yourself. It looks for the mkcert root, and for the root Warden or Den creates when it's installed (`~/.warden/ssl/rootca/certs/ca.cert.pem`, or `~/.den/...`, or under `WARDEN_HOME_DIR` or `DEN_HOME_DIR` when those are set). Node reads only one file, so when it finds more than one root it joins them into `drexbot/extra-ca.pem` under `$XDG_CACHE_HOME`, or `~/.cache` when that is unset.
+
+When the store's certificate isn't trusted, preflight blocks the run and the reason names both the certificate error and this variable. A self-signed certificate is its own root, so point the variable at the certificate file itself. If mkcert runs on Windows and drexbot runs in WSL, run `mkcert -CAROOT` on Windows to find the folder, and reach it from WSL under `/mnt/c/`.
 
 ## The files it keeps
 

@@ -6,9 +6,9 @@
 #
 # Node bundles its own CA list and ignores the system trust store, so a target
 # served over a locally-issued certificate fails verification here even though
-# curl and every browser on this machine accept it. The mkcert root is added
-# when it exists. Verification is never disabled -- a harness that skips TLS
-# checks cannot make any statement about a target's TLS.
+# curl and every browser on this machine accept it. The mkcert, Warden and Den
+# roots are added when they exist. Verification is never disabled -- a harness
+# that skips TLS checks cannot make any statement about a target's TLS.
 set -euo pipefail
 
 # A symlink to this file is not where the code is, so follow the link chain to
@@ -28,12 +28,32 @@ done
 here=$(cd "$(dirname "$source")" && pwd)
 
 if [[ -z "${NODE_EXTRA_CA_CERTS:-}" ]]; then
-	for ca in "${HOME}/.local/share/mkcert/rootCA.pem" "/usr/local/share/ca-certificates/mkcert"*.crt; do
+	roots=()
+	for ca in \
+		"${HOME}/.local/share/mkcert/rootCA.pem" \
+		"/usr/local/share/ca-certificates/mkcert"*.crt \
+		"${WARDEN_HOME_DIR:-${HOME}/.warden}/ssl/rootca/certs/ca.cert.pem" \
+		"${DEN_HOME_DIR:-${HOME}/.den}/ssl/rootca/certs/ca.cert.pem"; do
 		if [[ -r "$ca" ]]; then
-			export NODE_EXTRA_CA_CERTS="$ca"
-			break
+			roots+=("$ca")
 		fi
 	done
+
+	# Node reads one file, so several roots are joined into one it can read.
+	if ((${#roots[@]} == 1)); then
+		export NODE_EXTRA_CA_CERTS="${roots[0]}"
+	elif ((${#roots[@]} > 1)); then
+		bundle_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/drexbot"
+		mkdir -p "$bundle_dir"
+		bundle=$(mktemp "${bundle_dir}/extra-ca.XXXXXX")
+		# A newline after each root, so a file missing its last one cannot merge two PEM blocks.
+		for ca in "${roots[@]}"; do
+			cat "$ca"
+			echo
+		done >"$bundle"
+		mv -f "$bundle" "${bundle_dir}/extra-ca.pem"
+		export NODE_EXTRA_CA_CERTS="${bundle_dir}/extra-ca.pem"
+	fi
 fi
 
 exec node "${here}/../dist/src/cli/main.js" "$@"

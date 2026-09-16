@@ -16,6 +16,7 @@ import { journeyChecks } from './journeys.js'
 import { depthChecks } from './depth.js'
 import { checkoutChecks } from './checkout.js'
 import { regressionChecks } from './regression.js'
+import { describeUnreachable } from './unreachable.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from './selectors.js'
 import { WORKSPACE } from '../workspace.js'
 
@@ -122,7 +123,7 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 					reachable: false,
 					build: 'unknown',
 					capabilities: capabilities(),
-					problem: cause instanceof Error ? cause.message : String(cause),
+					problem: describeUnreachable(cause),
 				}
 			}
 		},
