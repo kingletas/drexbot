@@ -69,7 +69,36 @@ describe('a browser that cannot start', () => {
 		assert.ok(failure instanceof PreconditionFailure)
 		assert.equal(classify(failure), 'precondition')
 		assert.match(failure.message, /missing a system library \(libnspr4\.so\)/)
-		assert.match(failure.message, /run `make browser-deps`/)
+		assert.match(failure.message, /On Debian or Ubuntu, including WSL, run `make browser-deps`/)
+		assert.match(
+			failure.message,
+			/Elsewhere, install Chromium's libraries with your package manager/,
+		)
+		assert.ok(failure.cause instanceof Error, 'the original launch error is kept as the cause')
+	})
+
+	it('recognises the error as a fresh WSL machine reports it', () => {
+		const shell =
+			'/home/someone/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell'
+		const failure = launchFailure(
+			new Error(
+				[
+					'browserType.launch: Target page, context or browser has been closed',
+					'Browser logs:',
+					'',
+					`<launching> ${shell} --disable-field-trial-config --headless --no-sandbox`,
+					'<launched> pid=10954',
+					`[pid=10954][err] ${shell}: error while loading shared libraries: libnspr4.so: cannot open shared object file: No such file or directory`,
+					'Call log:',
+					`  - <launching> ${shell} --disable-field-trial-config --headless --no-sandbox`,
+					'  - <launched> pid=10954',
+					`  - [pid=10954][err] ${shell}: error while loading shared libraries: libnspr4.so: cannot open shared object file: No such file or directory`,
+				].join('\n'),
+			),
+		)
+
+		assert.ok(failure instanceof PreconditionFailure)
+		assert.match(failure.message, /missing a system library \(libnspr4\.so\)/)
 	})
 
 	it("names Playwright's own missing-dependencies report the same way", () => {
@@ -86,6 +115,7 @@ describe('a browser that cannot start', () => {
 
 		assert.ok(failure instanceof TransportFailure)
 		assert.equal(classify(failure), 'transport')
+		assert.ok(failure.cause instanceof Error)
 		assert.match(failure.message, /^could not start a browser: /)
 	})
 
@@ -126,7 +156,10 @@ describe('a browser that cannot start', () => {
 			const result = browserCommand({ PLAYWRIGHT_BROWSERS_PATH: scratch })
 
 			assert.equal(result.status, 1, result.stdout)
-			assert.match(result.stderr, /Chromium is not installed .* Run `make setup`/)
+			assert.match(
+				result.stderr,
+				/Chromium is not installed where this version of Playwright looks for it \(\S*chrom\S*\)\. Run `make setup`/,
+			)
 		})
 
 		it('says Chromium starts when it does', () => {

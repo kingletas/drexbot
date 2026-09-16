@@ -42,13 +42,13 @@ make setup
 
 Dependencies, plus the Chromium that Playwright drives. It fetches its own rather than using the browser you have, so a check behaves the same here as it does anywhere else. Then it starts that Chromium once, to prove it runs.
 
-On Linux, including WSL, Chromium also needs system libraries that a fresh machine may not have. If they are missing, `make setup` stops and says so. Install them, then run `make setup` again:
+On Debian or Ubuntu, including WSL, Chromium also needs system libraries that a fresh machine may not have. If they are missing, `make setup` stops and says so. Install them, then run `make setup` again:
 
 ```bash
 make browser-deps
 ```
 
-It asks for `sudo`, which is why `make setup` doesn't run it for you.
+It asks for `sudo`, which is why `make setup` doesn't run it for you. It uses `apt-get`, so on other Linux systems install Chromium's libraries with your own package manager instead.
 
 ```bash
 make install

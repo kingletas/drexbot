@@ -20,7 +20,7 @@ Node 20.19 or newer.
 make setup
 ```
 
-This installs the dependencies and the one browser the journeys drive.
+This installs the dependencies and the one browser the journeys drive, then checks that browser starts. On Debian or Ubuntu, including WSL, if it can't, run `make browser-deps` and then `make setup` again.
 
 ## Running the checks
 

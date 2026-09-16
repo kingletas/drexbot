@@ -25,6 +25,7 @@ Every command, every flag and every verdict, in plain words. If you are here to 
 | ----------------------------------- | --------------------------------------------------------------- |
 | `run --target magento`              | Run the checks and give a verdict                               |
 | `baseline --target magento`         | Ask the store what is in it, and write it down                  |
+| `browser`                           | Start Chromium once, and say what to install if it can't        |
 | `probe --target magento`            | Report whether the suite could drive this site, judging nothing |
 | `plan --target magento [--changed]` | Say what a run would do, and do none of it                      |
 | `selfcheck`                         | Prove the harness against its own stub, with no store involved  |
@@ -37,7 +38,7 @@ Every command, every flag and every verdict, in plain words. If you are here to 
 | `schedule plan\|install\|report`    | The systemd units a schedule needs                              |
 | `help`                              | The usage block                                                 |
 
-`baseline` is the only command drexbot adds. Every other one belongs to `harness-kernel`, which is why they behave identically in any harness built on it.
+`baseline` and `browser` are the two commands drexbot adds. Every other one belongs to `harness-kernel`, which is why they behave identically in any harness built on it.
 
 ## The flags
 

@@ -68,9 +68,9 @@ flowchart LR
     class kernel,drexbot side
 ```
 
-`src/cli/main.ts` is the whole of the wiring. It builds a `Harness` — a name, a registry with one target in it, and a workspace — hands it to the kernel's `runCli`, and adds the one command the shared set doesn't have. Nineteen lines, imports included.
+`src/cli/main.ts` is the whole of the wiring. It builds a `Harness` — a name, a registry with one target in it, and a workspace — hands it to the kernel's `runCli`, and adds the two commands the shared set doesn't have.
 
-That command is `baseline`, and it's the only one. Every other verb you can type is the kernel's, which is why `drexbot flakes` and the other harness's `flakes` behave identically and neither one implements it.
+Those are `baseline`, which asks a store what is in it, and `browser`, which checks Chromium starts on this machine. Every other verb you can type is the kernel's, which is why `drexbot flakes` and the other harness's `flakes` behave identically and neither one implements it.
 
 ## What a target has to answer
 
@@ -126,8 +126,9 @@ Three things fall out of that shape:
 
 | Where                                                                    | What it owns                                                                     |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `src/cli/main.ts`                                                        | The wiring: name, registry, workspace, and the one extra command                 |
+| `src/cli/main.ts`                                                        | The wiring: name, registry, workspace, and the two extra commands                |
 | `src/cli/commands/baseline.ts`                                           | Asks the store what is in it, over GraphQL, read-only                            |
+| `src/cli/commands/browser.ts`                                            | Starts Chromium once and says what to install when it can't                      |
 | `src/magento/adapter.ts`                                                 | The `Target`. Capabilities, preflight, the six suites, the browser's lifetime    |
 | `src/magento/checks.ts`                                                  | Smoke and session-less — plain HTTP, no browser                                  |
 | `src/magento/journeys.ts` · `regression.ts` · `depth.ts` · `checkout.ts` | The eighteen browser checks                                                      |

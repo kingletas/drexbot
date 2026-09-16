@@ -27,7 +27,7 @@ setup: build ## Install dependencies and a browser, then check the browser start
 	./bin/drexbot browser
 
 .PHONY: browser-deps
-browser-deps: $(NODE_MODULES) ## Install the system libraries Chromium needs on Linux (asks for sudo)
+browser-deps: $(NODE_MODULES) ## Install the system libraries Chromium needs on Debian or Ubuntu (asks for sudo)
 	npx playwright install-deps chromium
 
 .PHONY: build

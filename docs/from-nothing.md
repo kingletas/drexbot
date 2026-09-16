@@ -67,13 +67,13 @@ make setup
 
 This fetches the dependencies and the one browser it drives, Chromium. It downloads its own copy rather than using the browser you already have, so a check behaves the same on your laptop as it does anywhere else. Last, it starts that Chromium once to make sure it runs.
 
-On Linux, including WSL, Chromium also needs some system libraries, and a fresh machine often lacks them. If so, `make setup` stops and tells you. Install them, then run `make setup` again:
+On Debian or Ubuntu, including WSL, Chromium also needs some system libraries, and a fresh machine often lacks them. If so, `make setup` stops and tells you. Install them, then run `make setup` again:
 
 ```bash
 make browser-deps
 ```
 
-This one asks for your `sudo` password, so it's a separate step rather than part of `make setup`.
+This one asks for your `sudo` password, so it's a separate step rather than part of `make setup`. It uses `apt-get`, so on another Linux system install Chromium's libraries with your own package manager instead.
 
 ```bash
 make install
