@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 **A certificate the browser won't accept says what to do about it.** A store can pass preflight and still fail every browser check with `ERR_CERT_AUTHORITY_INVALID`, because Chromium keeps its own list of trusted certificates and never reads `NODE_EXTRA_CA_CERTS`. That read as `transport`, so it was retried, tripped the circuit breaker, and took the checks behind it down as unreachable: 3 failed, 12 blocked, and nothing on the page said what was wrong. The navigation that opens a check now blocks on a refused certificate instead, with the fix in the reason — for a local store, the `certutil` line that imports the root into `~/.pki/nssdb`; for a public one, that the chain it serves doesn't reach a root Chromium trusts. A hostname mismatch, an expired certificate and a revoked one are named as they are, with no root suggested, because trusting a root fixes none of them. The same goes for the two trust decisions Chromium doesn't spell `ERR_CERT_`: a certificate missing from a transparency log, and a store asking for a client certificate. Nothing else about a navigation failure changes: a refused connection is still `transport` and still retried.
 
