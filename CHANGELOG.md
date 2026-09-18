@@ -63,8 +63,9 @@ to that channel — where SECURITY.md had said the harness holds none.
 
 The first release, and the first one anybody else can install.
 
-Extracted from `houndbot`, where it was the Magento half of a harness that also
-tested the Hound backend. The full history to that point is in that repository.
+Extracted from a private harness, where it was the Magento half of a package
+that also tested an internal backend. The full history to that point is in that
+repository.
 
 It stands alone because it asks a store for nothing but HTTPS: none of its 40
 checks needs a database, a credential or a shell into the stack, so it can be
