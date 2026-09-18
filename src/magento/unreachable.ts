@@ -1,3 +1,5 @@
+import { isLocalStore } from '../surfaces/certificate.js'
+
 /** What the hint needs to know besides the error itself. */
 export interface UnreachableContext {
 	readonly baseUrl: string
@@ -20,27 +22,6 @@ const MISSING_INTERMEDIATE_CODES = new Set([
 	'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
 	'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
 ])
-
-const LOCAL_SUFFIXES = ['.test', '.localhost', '.local']
-
-const LOCAL_HOSTS = new Set(['localhost', '[::1]'])
-
-const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/
-
-/** A development store, where a local root is the expected issuer rather than a defect. */
-const isLocal = (baseUrl: string): boolean => {
-	let hostname: string
-	try {
-		hostname = new URL(baseUrl).hostname.toLowerCase().replace(/\.$/, '')
-	} catch {
-		return false
-	}
-	return (
-		LOCAL_HOSTS.has(hostname) ||
-		LOOPBACK_V4.test(hostname) ||
-		LOCAL_SUFFIXES.some(suffix => hostname.endsWith(suffix))
-	)
-}
 
 const codesOf = (error: unknown): string[] => {
 	const codes: string[] = []
@@ -77,7 +58,7 @@ export const describeUnreachable = (error: unknown, context: UnreachableContext)
 	const message = error instanceof Error ? error.message : String(error)
 	const codes = codesOf(error)
 
-	if (isLocal(context.baseUrl)) {
+	if (isLocalStore(context.baseUrl)) {
 		return codes.some(code => UNTRUSTED_ROOT_CODES.has(code))
 			? `${message}. ${localHint(context.extraCaCerts)}`
 			: message

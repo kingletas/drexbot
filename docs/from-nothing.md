@@ -139,7 +139,7 @@ You can also pass the URL on the command line, which is the easier way to try on
 drexbot run --target magento --url https://your-store.example
 ```
 
-**A word about HTTPS.** drexbot asks for an ordinary certificate, verified the ordinary way, and it never turns that off — a harness that skips TLS checks can't tell you anything about your TLS. If your development store uses a locally issued certificate, put the root in `NODE_EXTRA_CA_CERTS`; if you use mkcert, Warden or Den, the wrapper finds it for you.
+**A word about HTTPS.** drexbot asks for an ordinary certificate, verified the ordinary way, and it never turns that off — a harness that skips TLS checks can't tell you anything about your TLS. If your development store uses a locally issued certificate, put the root in `NODE_EXTRA_CA_CERTS`; if you use mkcert, Warden or Den, the wrapper finds it for you. The browser has a list of its own, so the same root also has to be imported into Chromium's — [Configuration](configuration.md#chromium-keeps-its-own-list) has the one command.
 
 ## Step 3: ask the store what is in it
 

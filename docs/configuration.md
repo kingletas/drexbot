@@ -82,6 +82,22 @@ A store counts as local when its hostname is `localhost`, a `127.x.x.x` or `[::1
 
 An expired certificate or a hostname mismatch is named with no hint, local or not.
 
+### Chromium keeps its own list
+
+`NODE_EXTRA_CA_CERTS` covers the harness's own requests, which is what preflight makes. **The browser checks are a separate question**: Chromium never reads that variable and keeps its own list of trusted certificates, so a store can pass preflight and then fail every browser check with `ERR_CERT_AUTHORITY_INVALID`.
+
+This is for a **local development store**. On a public store, a root Chromium already trusts is the whole point, so a certificate it refuses there is a fault to fix in the store rather than something to trust your way past.
+
+On Linux, Chromium reads the database at `~/.pki/nssdb`; on macOS and Windows it reads the system's own trusted roots. `mkcert -install` writes the root wherever it belongs; Warden and Den do not always. To add one by hand on Linux (`certutil` comes from `libnss3-tools`):
+
+```bash
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n warden-local-ca -i "$HOME/.warden/ssl/rootca/certs/ca.cert.pem"
+```
+
+`certutil` fails with `SEC_ERROR_BAD_DATABASE` when that folder doesn't exist yet, so create it first with `mkdir -p ~/.pki/nssdb`. It writes the database itself.
+
+A `blocked` check still fails the run, which still exits non-zero. A browser check whose **opening navigation** hits a certificate Chromium refuses is `blocked` rather than failed: no retry makes an untrusted certificate work, and a blocked check doesn't count towards the circuit breaker, so the rest of the run still reports. A local store is told how to import the root; a public one is told to check the chain it serves. A hostname mismatch, an expired certificate and a revoked one are named as they are, with no root suggested, because trusting a root fixes none of them.
+
 ## The files it keeps
 
 Four directories, and whether each is committed is a decision rather than an accident.

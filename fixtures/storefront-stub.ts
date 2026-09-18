@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer as createTlsServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 
 /**
@@ -41,8 +42,15 @@ const REST_REFUSES = new Set([
 	'/rest/all/V1/store/storeConfigs',
 ])
 
+/** A key and certificate to serve over HTTPS, for a test about how a store's certificate is treated. */
+export interface StubTls {
+	readonly key: Buffer
+	readonly cert: Buffer
+}
+
 export const startStorefrontStub = async (
 	defect: StoreDefect = 'none',
+	tls?: StubTls,
 ): Promise<StorefrontStub> => {
 	const handler = (request: IncomingMessage, response: ServerResponse): void => {
 		const path = (request.url ?? '/').split('?')[0] ?? '/'
@@ -92,12 +100,13 @@ export const startStorefrontStub = async (
 		return send(404, 'not found')
 	}
 
-	const server = createServer(handler)
+	const server = tls === undefined ? createServer(handler) : createTlsServer(tls, handler)
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
 	const { port } = server.address() as AddressInfo
 
 	return {
-		url: `http://127.0.0.1:${port}`,
+		// Over TLS the host is the name the certificate is issued for, not the address.
+		url: tls === undefined ? `http://127.0.0.1:${port}` : `https://localhost:${port}`,
 		close: () =>
 			new Promise<void>((resolve, reject) =>
 				server.close(error => (error ? reject(error) : resolve())),

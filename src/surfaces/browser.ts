@@ -4,6 +4,7 @@ import { type Browser, type BrowserContext, type Locator, type Page } from 'play
 import type { DriftRecorder } from 'harness-kernel'
 import { AssertionFailure } from 'harness-kernel'
 import { launchChromium } from './browser-launch.js'
+import { navigationFailure } from './certificate.js'
 
 /** An ordered list of ways to find one thing, most portable first. */
 export type Candidates = readonly string[]
@@ -294,7 +295,7 @@ export class BrowserSurface {
 			if (signal?.aborted === true) {
 				throw new StepTimeout(`${where.step} — ${firstLine(error)}`)
 			}
-			throw error
+			throw navigationFailure(error, this.options.baseUrl)
 		}
 
 		signal?.removeEventListener('abort', stop)

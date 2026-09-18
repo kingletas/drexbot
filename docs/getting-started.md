@@ -67,7 +67,7 @@ export MAGENTO_URL=https://your-store.example
 
 Or per command, with `--url`. If the admin isn't at `/admin`, set `MAGENTO_ADMIN_PATH` too, so the session-less checks knock on the right door.
 
-drexbot verifies TLS the ordinary way and never turns that off. For a development store on a locally issued certificate, put the root in `NODE_EXTRA_CA_CERTS` — the wrapper finds a mkcert, Warden or Den root on its own, as described in [Configuration](configuration.md#tls).
+drexbot verifies TLS the ordinary way and never turns that off. For a development store on a locally issued certificate, put the root in `NODE_EXTRA_CA_CERTS` — the wrapper finds a mkcert, Warden or Den root on its own, as described in [Configuration](configuration.md#tls). **That covers drexbot's own requests and not the browser's**: Chromium keeps its own list, so the same root has to be imported there too, which [Chromium keeps its own list](configuration.md#chromium-keeps-its-own-list) shows how to do.
 
 Before asking for a verdict, ask whether the suite can even drive the site:
 
