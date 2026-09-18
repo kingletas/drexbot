@@ -3,11 +3,18 @@ import { createServer as createTlsServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 
 /**
- * A defect the stub storefront can be told to have; `error-page-200` is the one
- * worth naming, because a Magento status code alone is not evidence.
+ * A defect the stub storefront can be told to have. Two are worth naming, because a
+ * status code alone is neither evidence (`error-page-200`) nor a statement about who
+ * answered (`proxy-404`).
  */
 export type StoreDefect =
-	'none' | 'env-php-served' | 'admin-open' | 'rest-open' | 'error-page-200' | 'no-version'
+	| 'none'
+	| 'env-php-served'
+	| 'admin-open'
+	| 'rest-open'
+	| 'error-page-200'
+	| 'no-version'
+	| 'proxy-404'
 
 export interface StorefrontStub {
 	readonly url: string
@@ -22,6 +29,11 @@ const DASHBOARD =
 	'<!doctype html><html><body class="adminhtml-dashboard-index">' +
 	'<nav class="menu-magento-backend-dashboard">Dashboard</nav>' +
 	'<div id="dashboard-advanced-reports">Advanced Reporting</div></body></html>'
+
+/** A front end answering for itself: an HTML error page with nothing of Magento in it. */
+const PROXY_NOT_FOUND =
+	'<!doctype html><html><head><title>404 Not Found</title></head>' +
+	'<body><center><h1>404 Not Found</h1></center><hr></body></html>'
 
 const page = (bodyClass: string): string =>
 	`<!doctype html><html><body class="page-layout-1column ${bodyClass}">content</body></html>`
@@ -61,9 +73,9 @@ export const startStorefrontStub = async (
 		}
 
 		if (path === '/magento_version') {
-			return defect === 'no-version'
-				? send(404, 'not found')
-				: send(200, 'Magento/2.4 (Enterprise)', 'text/plain')
+			if (defect === 'no-version') return send(404, 'not found', 'text/plain')
+			if (defect === 'proxy-404') return send(404, PROXY_NOT_FOUND)
+			return send(200, 'Magento/2.4 (Enterprise)', 'text/plain')
 		}
 
 		if (request.method === 'POST' && path === '/graphql') {

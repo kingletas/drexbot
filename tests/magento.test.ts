@@ -72,6 +72,17 @@ describe('preflight against a Magento store', () => {
 		assert.equal(preflight.reachable, false)
 		assert.equal(observation.verdict, 'blocked')
 		assert.match(observation.reason ?? '', /answered 404/)
+		// The run record is the only artefact of a blocked run, so what came back has
+		// to reach it: a front end's error page and Magento's own are both 404.
+		assert.match(observation.reason ?? '', /The reply was text\/plain and its body is not an HTML/)
+	})
+
+	it('carries a front-end error page into the run record', async () => {
+		const { preflightObservation: observation } = await against('proxy-404')
+
+		assert.equal(observation.verdict, 'blocked')
+		assert.match(observation.reason ?? '', /text\/html/)
+		assert.match(observation.reason ?? '', /looks like an HTML error page/)
 	})
 })
 

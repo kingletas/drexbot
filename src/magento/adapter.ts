@@ -16,6 +16,7 @@ import { journeyChecks } from './journeys.js'
 import { depthChecks } from './depth.js'
 import { checkoutChecks } from './checkout.js'
 import { regressionChecks } from './regression.js'
+import { describeUnexpectedStatus } from './unexpected-status.js'
 import { describeUnreachable } from './unreachable.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from './selectors.js'
 import { WORKSPACE } from '../workspace.js'
@@ -23,6 +24,9 @@ import { WORKSPACE } from '../workspace.js'
 const DEFAULT_URL = 'https://vanilla.test'
 
 const DEFAULT_ADMIN_PATH = '/admin'
+
+/** Where Magento serves its edition and minor version without a session. */
+const VERSION_PATH = '/magento_version'
 
 /**
  * How long one attempt of a browser check may run, by suite. Every browser step
@@ -104,17 +108,22 @@ export const magentoTarget = (options: TargetOptions = {}): Target => {
 
 		async preflight(): Promise<PreflightResult> {
 			try {
-				// Magento serves its edition and minor version here without a session.
-				// It is coarse -- no patch level -- but it is a real identity, and a
+				// The identity is coarse -- no patch level -- but it is a real one, and a
 				// run that cannot say what it tested is not evidence about anything.
-				const version = await http.get('/magento_version')
+				const version = await http.get(VERSION_PATH)
 
 				if (version.status !== 200) {
 					return {
 						reachable: false,
 						build: 'unknown',
 						capabilities: capabilities(),
-						problem: `${baseUrl}/magento_version answered ${version.status}`,
+						problem: describeUnexpectedStatus({
+							baseUrl,
+							path: VERSION_PATH,
+							status: version.status,
+							headers: version.headers,
+							body: version.body,
+						}),
 					}
 				}
 
