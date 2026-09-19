@@ -25,6 +25,14 @@ results/
 # channel decide whether another person's run says anything.
 /baselines/*.notify.json
 
+# Nor are the run ledgers. What drifted and what flaked is a record of the runs
+# one person made against their own store, so a committed copy publishes that
+# history and lets one machine's runs decide whether another's looks steady.
+# The quarantine ledger beside them stays committed: holding a check out of the
+# verdict is a decision rather than a run.
+/ledger/*.drift.json
+/ledger/*.flake.json
+
 # The user-level ~/.gitignore is core.excludesFile for every repository under
 # $HOME and excludes these outright. Without the negations this repository
 # silently loses its scripts and its node version pin.
