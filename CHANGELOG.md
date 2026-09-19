@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6
 
 **A preflight the store answers with something other than 200 now says what could be wrong.** A run against a store whose `/magento_version` answered 404 blocked all six suites on one line, _https://store.test/magento_version answered 404_, and gave nobody anything to act on. The status now arrives with the reply's content type, whether the body looks like an HTML error page, and a candidate cause when the answer carries one to name. An HTML error page with Magento's own markup in it says the store answered and does not serve this route, which is what a headless or route-narrowed storefront does, and what a base URL missing a store-code prefix does. An HTML error page without that markup says something in front of the store can produce it, either a cache or proxy answering before Magento sees the path or a front end that is not this store, and names what terminates TLS as the thing to check. A 404 carrying nothing to attribute it to still gets the status, the content type and the body, and no hint: a store that is simply absent is not evidence of anything else. A redirect names the address it points at, since redirects are here requested and never followed. A 401, a 403, a 503 and a gateway status each name what produces them. The block itself is unchanged, and a run that cannot say what it tested still runs nothing.
 
