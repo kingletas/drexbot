@@ -59,7 +59,7 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | -------------------------------------- | -------------- | ----------------------------------------------------------------------- |
 | `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                             |
 | `--env`                                | `local`        | Whose store baseline to read                                            |
-| `--on`                                 | `local`        | A bee host from `swarm-hosts`, or this machine                          |
+| `--on`                                 | `local`        | Bee hosts from `swarm-hosts`, comma-separated, or this machine          |
 | `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator                    |
 | `--seconds`                            | `60`           | Seconds of load; at least 10                                            |
 | `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                              |
@@ -110,6 +110,10 @@ bees  ssh://bees.example  cpus=4 memory=16g
 ```
 
 The budget is required. It is the most the bees on that machine may take together, because the machine is somebody's and has other work to do. Then `--on bees`.
+
+**Several hosts make one run:** `--on local,bees` runs the whole shape on each, at once, and records them as one run whose shape names both. If a bee fails to start on one host, the others are stopped, and every host still tears down.
+
+**A host's line can also name its route to the store,** because that is a fact about the host: `forward=8080=192.0.2.10:18080` for a relay, and `network=store_default` for a Docker network the store is on. A flag overrides the line for one run. `local` can have a line too, with `-` for its Docker host, to override this machine's budget or route.
 
 **A store that answers only to its own address** (a store at `http://localhost:8080/` that redirects anything else there) can still be loaded from another machine: make it reachable at some address, and give every bee a relay with `--forward 8080=192.0.2.10:18080`. Each bee listens on its own `localhost:8080` and passes the connection on, so the store sees exactly the address it expects. How that address is made reachable is yours to decide, and deliberately not something this tool does.
 

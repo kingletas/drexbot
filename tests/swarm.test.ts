@@ -17,7 +17,7 @@ import {
 import { beeLinesIn, Windows, type BeeLine } from '../src/bee/lines.js'
 import { readBeeConfig } from '../src/bee/config.js'
 import { awsHandover } from '../src/swarm/aws.js'
-import { conduct, tearDown, type Launcher } from '../src/swarm/conductor.js'
+import { conduct, conductAcross, tearDown, type Launcher } from '../src/swarm/conductor.js'
 import type { Container, Docker } from '../src/swarm/docker.js'
 import { emulatorRefusal, EcsEmulator } from '../src/swarm/ecs.js'
 import { saturation } from '../src/swarm/measure.js'
@@ -541,5 +541,106 @@ describe('conducting a run', () => {
 		const teardown = await tearDown({ run: 'run-1' }, docker as unknown as Docker, [id])
 		assert.equal(teardown.verified, false)
 		assert.equal(teardown.leftover, 1)
+	})
+})
+
+describe('one run across several hosts', () => {
+	const across = (overrides: { prefix: string; name: string }) => {
+		const planned = planRun({
+			url: 'http://store.example:8080/',
+			stages: [{ stage: 'home', path: '/' }],
+			host: { ...host, name: overrides.name },
+			via: 'docker',
+			shape: shape(),
+			images: { browser: 'b', protocol: 'p' },
+			run: 'run-2',
+			beePrefix: overrides.prefix,
+		})
+		assert.equal(typeof planned, 'object')
+		return planned as RunPlan
+	}
+
+	it('gives every bee on every host its own id', () => {
+		assert.deepEqual(
+			across({ prefix: 'bees', name: 'bees' }).bees.map(bee => bee.id),
+			['bees-browser-1', 'bees-protocol-1'],
+		)
+	})
+
+	it('records both hosts as one run, and verifies teardown on each', async () => {
+		const here = new FakeDocker()
+		const there = new FakeDocker()
+		const launcherFor = (docker: FakeDocker): Launcher => ({
+			start: (run, bee) => docker.start(run, bee),
+			cleanup: () => Promise.resolve(),
+		})
+		const record = await conductAcross(
+			[
+				{
+					plan: across({ prefix: 'here', name: 'here' }),
+					docker: here as unknown as Docker,
+					launcher: launcherFor(here),
+				},
+				{
+					plan: across({ prefix: 'there', name: 'there' }),
+					docker: there as unknown as Docker,
+					launcher: launcherFor(there),
+				},
+			],
+			() => undefined,
+		)
+		assert.equal(record.host, 'here+there')
+		assert.equal(record.result.browser?.bees, 2)
+		assert.deepEqual(record.teardown, { removed: 4, leftover: 0, verified: true })
+		assert.equal(here.containers.size + there.containers.size, 0)
+	})
+
+	it('stops the other hosts and still tears every one down when one fails', async () => {
+		const here = new FakeDocker()
+		const there = new FakeDocker()
+		const stop = { requested: false }
+		await assert.rejects(
+			conductAcross(
+				[
+					{
+						plan: across({ prefix: 'here', name: 'here' }),
+						docker: here as unknown as Docker,
+						launcher: {
+							start: (run, bee) => here.start(run, bee),
+							cleanup: () => Promise.resolve(),
+						},
+					},
+					{
+						plan: across({ prefix: 'there', name: 'there' }),
+						docker: there as unknown as Docker,
+						launcher: {
+							start: () => Promise.reject(new Error('there has no image')),
+							cleanup: () => Promise.resolve(),
+						},
+					},
+				],
+				() => undefined,
+				stop,
+			),
+			/there has no image/,
+		)
+		assert.equal(stop.requested, true)
+		assert.equal(here.containers.size + there.containers.size, 0)
+	})
+})
+
+describe('a host line that names its own route to the store', () => {
+	it('reads a relay and a network, and lets local be overridden', () => {
+		const directory = mkdtempSync(join(tmpdir(), 'swarm-routes-'))
+		writeFileSync(
+			join(directory, 'swarm-hosts'),
+			'local - cpus=2 memory=4g network=store_default forward=8080=web:80\nbees ssh://bees.example cpus=4 memory=8g forward=8080=198.51.100.7:18080\n',
+		)
+		const [local, bees] = beeHosts(directory)
+		assert.equal(local?.dockerHost, undefined)
+		assert.equal(local?.network, 'store_default')
+		assert.equal(local?.forward, '8080=web:80')
+		assert.equal(bees?.forward, '8080=198.51.100.7:18080')
+		assert.equal(bees?.network, undefined)
 	})
 })

@@ -35,13 +35,28 @@ export interface Progress {
 
 const sleep = async (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
-export const conduct = async (
-	plan: RunPlan,
-	docker: Docker,
-	launcher: Launcher,
+/** What one host's part of a run left: its bees' lines, its teardown, and what a reader must know. */
+interface HostOutcome {
+	readonly host: string
+	readonly startedAt: string
+	readonly lines: readonly BeeLine[]
+	readonly teardown: Teardown
+	readonly caveats: readonly string[]
+	/** Seconds of load it actually had, which is less than planned when it was stopped. */
+	readonly seconds: number
+}
+
+export interface HostRun {
+	readonly plan: RunPlan
+	readonly docker: Docker
+	readonly launcher: Launcher
+}
+
+const conductHost = async (
+	{ plan, docker, launcher }: HostRun,
 	say: Progress,
-	stop: { requested: boolean } = { requested: false },
-): Promise<RunRecord> => {
+	stop: { requested: boolean },
+): Promise<HostOutcome> => {
 	const startedAt = new Date().toISOString()
 	const started: { bee: BeeOrder; id: string }[] = []
 	const caveats: string[] = []
@@ -62,14 +77,13 @@ export const conduct = async (
 		// Each bee ends itself; the wait is only as long as the longest a bee may live, plus a little.
 		const loadStarted = Date.now()
 		const giveUp = loadStarted + (plan.lifetime + 30) * 1_000
-		say(`running for ${plan.shape.seconds}s of load`)
 		while (!stop.requested && Date.now() < giveUp) {
 			if ((await docker.running(started.map(s => s.id))).size === 0) break
 			await sleep(3_000)
 		}
 		if (stop.requested) {
 			seconds = Math.max(1, Math.min(seconds, Math.round((Date.now() - loadStarted) / 1_000)))
-			caveats.push(`the run was stopped by hand after about ${seconds}s, before its bees finished`)
+			caveats.push(`the run was stopped after about ${seconds}s, before its bees finished`)
 		}
 
 		for (const { bee, id } of started) {
@@ -85,14 +99,49 @@ export const conduct = async (
 		)
 		await launcher.cleanup().catch(() => undefined)
 	}
+	return { host: plan.host.name, startedAt, lines, teardown, caveats, seconds }
+}
 
-	const result = reconcile(lines, seconds)
+/**
+ * Runs one plan per host at once, as one run; if any host fails, the others are stopped and every host still tears down.
+ */
+export const conductAcross = async (
+	runs: readonly HostRun[],
+	say: Progress,
+	stop: { requested: boolean } = { requested: false },
+): Promise<RunRecord> => {
+	const first = runs[0]
+	if (first === undefined) throw new Error('a run needs at least one host')
+	say(`running for ${first.plan.shape.seconds}s of load`)
+	const settled = await Promise.allSettled(
+		runs.map(run =>
+			conductHost(run, say, stop).catch((error: unknown) => {
+				stop.requested = true
+				throw error
+			}),
+		),
+	)
+	const failure = settled.find(outcome => outcome.status === 'rejected')
+	if (failure !== undefined) throw failure.reason
+	const outcomes = settled.flatMap(outcome =>
+		outcome.status === 'fulfilled' ? [outcome.value] : [],
+	)
+
+	const seconds = Math.min(...outcomes.map(outcome => outcome.seconds))
+	const result = reconcile(
+		outcomes.flatMap(outcome => outcome.lines),
+		seconds,
+	)
+	const several = outcomes.length > 1
+	const caveats = outcomes.flatMap(outcome =>
+		outcome.caveats.map(caveat => (several ? `${outcome.host}: ${caveat}` : caveat)),
+	)
 	for (const kind of ['browser', 'protocol'] as const) {
 		const outcome = result[kind]
 		// A request still waiting at the deadline is not counted, so a store the bees cannot reach reads as zero, not as failures.
 		if (outcome !== undefined && outcome.count === 0) {
 			caveats.push(
-				`no ${kind} request completed: the bees ran but may not reach the store at ${plan.url}`,
+				`no ${kind} request completed: the bees ran but may not reach the store at ${first.plan.url}`,
 			)
 		}
 		if (outcome !== undefined && outcome.finished < outcome.bees) {
@@ -101,21 +150,37 @@ export const conduct = async (
 			)
 		}
 	}
+	const unknown = outcomes.some(outcome => outcome.teardown.leftover < 0)
+	const host = outcomes.map(outcome => outcome.host).join('+')
 	return {
 		drexbot: RECORD_TAG,
-		run: plan.run,
-		startedAt,
+		run: first.plan.run,
+		startedAt: outcomes.map(outcome => outcome.startedAt).sort()[0] ?? new Date().toISOString(),
 		finishedAt: new Date().toISOString(),
-		target: plan.url,
-		host: plan.host.name,
-		via: plan.via,
-		shape: plan.shape,
-		shapeKey: shapeKey(plan.shape, plan.host.name, plan.via),
+		target: first.plan.url,
+		host,
+		via: first.plan.via,
+		shape: first.plan.shape,
+		shapeKey: shapeKey(first.plan.shape, host, first.plan.via),
 		result,
-		teardown,
+		teardown: {
+			removed: outcomes.reduce((sum, outcome) => sum + outcome.teardown.removed, 0),
+			leftover: unknown
+				? -1
+				: outcomes.reduce((sum, outcome) => sum + outcome.teardown.leftover, 0),
+			verified: outcomes.every(outcome => outcome.teardown.verified),
+		},
 		caveats,
 	}
 }
+
+export const conduct = async (
+	plan: RunPlan,
+	docker: Docker,
+	launcher: Launcher,
+	say: Progress,
+	stop: { requested: boolean } = { requested: false },
+): Promise<RunRecord> => conductAcross([{ plan, docker, launcher }], say, stop)
 
 /** Removes every container of the run, by what was started and by label, then looks again. */
 export const tearDown = async (

@@ -52,6 +52,9 @@ export interface BeeHost {
 	/** The most CPUs and bytes of memory every bee on it may take together. */
 	readonly cpus: number
 	readonly memory: number
+	/** How bees on this host reach the store, when that is not its own URL: a relay, and a Docker network. */
+	readonly forward?: string
+	readonly network?: string
 }
 
 const UNITS: Record<string, number> = { '': 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 }
@@ -75,8 +78,8 @@ export const localHost = (): BeeHost => ({
 })
 
 /**
- * `swarm-hosts`: one machine per line, as `NAME DOCKER_HOST cpus=N memory=SIZE`.
- * The budget is required, because the machine is somebody's and says how much of it we may use.
+ * `swarm-hosts`: one machine per line, as `NAME DOCKER_HOST cpus=N memory=SIZE [forward=PORT=HOST:PORT] [network=NAME]`.
+ * The budget is required, because the machine is somebody's; `local` with DOCKER_HOST `-` overrides this machine's defaults.
  */
 export const beeHosts = (directory: string = configDirectory()): BeeHost[] =>
 	lines(join(directory, 'swarm-hosts')).map(line => {
@@ -88,12 +91,21 @@ export const beeHosts = (directory: string = configDirectory()): BeeHost[] =>
 		if (name === undefined || dockerHost === undefined || !cpusSetting || !memorySetting) {
 			throw new Error(`swarm-hosts: "${line}" needs NAME DOCKER_HOST cpus=N memory=SIZE`)
 		}
-		return { name, dockerHost, cpus: Number(cpusSetting), memory: bytesOf(memorySetting) }
+		const forward = setting('forward')
+		const network = setting('network')
+		return {
+			name,
+			dockerHost: dockerHost === '-' ? undefined : dockerHost,
+			cpus: Number(cpusSetting),
+			memory: bytesOf(memorySetting),
+			...(forward === undefined ? {} : { forward }),
+			...(network === undefined ? {} : { network }),
+		}
 	})
 
 export const hostNamed = (name: string, directory: string = configDirectory()): BeeHost => {
-	if (name === 'local') return localHost()
 	const host = beeHosts(directory).find(candidate => candidate.name === name)
+	if (host === undefined && name === 'local') return localHost()
 	if (host === undefined) {
 		throw new Error(
 			`no bee host called "${name}" in ${join(directory, 'swarm-hosts')}; "local" is this machine`,

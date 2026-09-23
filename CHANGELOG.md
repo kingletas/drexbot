@@ -4,6 +4,8 @@
 
 **`drexbot swarm` puts load on a store from bees in containers, and blends two kinds.** A browser bee is Chromium walking the store's pages with a few workers; a protocol bee is k6 users asking for the same pages over plain HTTP. A few of the first beside many of the second gives realistic pages and real volume in one run, reported as one result: per stage and per kind, and time to first byte for the store under both. Both read the pages from the store baseline, and both only read. Bees run on this machine or, through Docker over SSH, on another one listed in `~/.config/drexbot/swarm-hosts` with a budget the run has to fit. No store is loaded unless its origin is in `~/.config/drexbot/swarm-targets`, and none is by default.
 
+**One run can span several machines.** `--on local,bees` runs the whole shape on each host at once and records them as one run; if one host cannot start a bee, the others are stopped and every host still tears down. A host's line in `swarm-hosts` can name its own route to the store, a relay or a Docker network, so a store that answers only to its own address can be loaded from anywhere.
+
 **Every run is recorded and compared.** A record goes to `results/swarm/` and is set beside the last run of the same shape against the same store, with the change in throughput and latency. Percentiles come from histograms every bee writes, which add up exactly across bees.
 
 **Every run ends with its containers removed, and the removal checked.** That holds when the run ends, when it is stopped with Ctrl-C, and when a bee fails to start. Every bee also stops itself at a hard lifetime, so a conductor killed outright leaves stopped containers at worst, and `drexbot swarm sweep` removes those.

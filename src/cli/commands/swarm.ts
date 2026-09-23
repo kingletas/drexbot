@@ -4,12 +4,19 @@ import type { Harness, Options } from 'harness-kernel'
 import { catalogueFor, loadStore } from '../../magento/baseline.js'
 import { beeLinesIn } from '../../bee/lines.js'
 import { awsHandover } from '../../swarm/aws.js'
-import { conduct, dockerLauncher, ecsLauncher } from '../../swarm/conductor.js'
+import {
+	conductAcross,
+	dockerLauncher,
+	ecsLauncher,
+	type HostRun,
+	type Launcher,
+} from '../../swarm/conductor.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
 import {
 	planRun,
+	runId,
 	shapeKey,
 	stagesOf,
 	type RunPlan,
@@ -47,7 +54,8 @@ export const SWARM_USAGE = `usage: drexbot swarm COMMAND [flags]
 Flags for run and aws:
   --url URL               the store; must be in swarm-targets        (default: $MAGENTO_URL)
   --env NAME              whose store baseline to read               (default: local)
-  --on HOST               a bee host from swarm-hosts, or local      (default: local)
+  --on HOST[,HOST]        bee hosts from swarm-hosts, or local; each runs the whole
+                          shape, and the run is recorded as one  (default: local)
   --via docker|ecs        start bees with Docker, or as ECS tasks on the local
                           emulator named by DREXBOT_ECS_ENDPOINT     (default: docker)
   --seconds N             seconds of load                            (default: 60)
@@ -107,11 +115,14 @@ const shapeFrom = (argv: readonly string[]): Shape => ({
 	seconds: number(argv, '--seconds', 60),
 })
 
-/** Everything that can refuse a run, checked before anything starts. */
+/** Everything that can refuse one host's part of a run, checked before anything starts. */
 const planFrom = (
 	harness: Harness,
 	options: Options,
 	argv: readonly string[],
+	hostName: string,
+	run?: string,
+	beePrefix?: string,
 ): RunPlan | string => {
 	const url = options.url ?? process.env['MAGENTO_URL']
 	if (url === undefined) return 'name the store with --url, or set MAGENTO_URL'
@@ -126,15 +137,19 @@ const planFrom = (
 	if (!store.captured) return store.uncapturedBecause ?? 'no store baseline'
 	const via = (flag(argv, '--via') ?? 'docker') as Via
 	if (via !== 'docker' && via !== 'ecs') return `--via is docker or ecs, not "${String(via)}"`
-	const forward = flag(argv, '--forward')
+	const host = hostNamed(hostName)
+	// A flag names the route for this run; otherwise the host's own line in swarm-hosts does.
+	const forward = flag(argv, '--forward') ?? host.forward
 	return planRun({
 		url: store.baseUrl,
 		stages: stagesOf(store),
-		host: hostNamed(flag(argv, '--on') ?? 'local'),
+		host,
 		via,
 		shape: shapeFrom(argv),
 		images: images(harness),
 		...(forward === undefined ? {} : { forward }),
+		...(run === undefined ? {} : { run }),
+		...(beePrefix === undefined ? {} : { beePrefix }),
 	})
 }
 
@@ -143,31 +158,43 @@ const run = async (
 	options: Options,
 	argv: readonly string[],
 ): Promise<number> => {
-	const plan = planFrom(harness, options, argv)
-	if (typeof plan === 'string') {
-		process.stderr.write(`drexbot swarm: ${plan}\n`)
+	const hosts = (flag(argv, '--on') ?? 'local').split(',').filter(name => name !== '')
+	if (flag(argv, '--via') === 'ecs' && hosts.length > 1) {
+		process.stderr.write(
+			'drexbot swarm: --via ecs runs on one host, the one its emulator starts containers on\n',
+		)
 		return 2
 	}
-	const docker = new Docker(plan.host)
-	for (const image of new Set(plan.bees.map(bee => bee.image))) {
-		if (!(await docker.hasImage(image))) {
-			process.stderr.write(
-				`drexbot swarm: ${plan.host.name} has no ${image}; build it with: drexbot swarm images --on ${plan.host.name}\n`,
-			)
+	const id = runId()
+	const runs: HostRun[] = []
+	for (const name of hosts) {
+		const plan = planFrom(harness, options, argv, name, id, hosts.length > 1 ? name : undefined)
+		if (typeof plan === 'string') {
+			process.stderr.write(`drexbot swarm: ${plan}\n`)
 			return 2
 		}
-	}
-	let launcher
-	if (plan.via === 'ecs') {
-		const endpoint = process.env['DREXBOT_ECS_ENDPOINT']
-		const refusal = emulatorRefusal(endpoint)
-		if (refusal !== undefined || endpoint === undefined) {
-			process.stderr.write(`drexbot swarm: ${refusal ?? 'no endpoint'}\n`)
-			return 2
+		const docker = new Docker(plan.host)
+		for (const image of new Set(plan.bees.map(bee => bee.image))) {
+			if (!(await docker.hasImage(image))) {
+				process.stderr.write(
+					`drexbot swarm: ${plan.host.name} has no ${image}; build it with: drexbot swarm images --on ${plan.host.name}\n`,
+				)
+				return 2
+			}
 		}
-		launcher = ecsLauncher(endpoint, docker)
-	} else {
-		launcher = dockerLauncher(docker, flag(argv, '--network'))
+		let launcher: Launcher
+		if (plan.via === 'ecs') {
+			const endpoint = process.env['DREXBOT_ECS_ENDPOINT']
+			const refusal = emulatorRefusal(endpoint)
+			if (refusal !== undefined || endpoint === undefined) {
+				process.stderr.write(`drexbot swarm: ${refusal ?? 'no endpoint'}\n`)
+				return 2
+			}
+			launcher = ecsLauncher(endpoint, docker)
+		} else {
+			launcher = dockerLauncher(docker, flag(argv, '--network') ?? plan.host.network)
+		}
+		runs.push({ plan, docker, launcher })
 	}
 
 	const stop = { requested: false }
@@ -177,11 +204,10 @@ const run = async (
 		say('stopping: tearing the bees down (Ctrl-C again to leave them to stop at their own limit)')
 	}
 	process.on('SIGINT', onSignal)
-	say(
-		`run ${plan.run}: ${plan.bees.length} bee(s) on ${plan.host.name} via ${plan.via}, against ${plan.url}`,
-	)
+	const bees = runs.reduce((sum, part) => sum + part.plan.bees.length, 0)
+	say(`run ${id}: ${bees} bee(s) on ${hosts.join(' and ')}, against ${runs[0]?.plan.url ?? ''}`)
 	try {
-		const record = await conduct(plan, docker, launcher, say, stop)
+		const record = await conductAcross(runs, say, stop)
 		const records = readRecords(harness.workspace.results)
 		const path = writeRecord(harness.workspace.results, record)
 		process.stdout.write(renderRecord(record, previousFor(record, records)))
@@ -233,7 +259,7 @@ const buildImages = async (harness: Harness, argv: readonly string[]): Promise<n
 }
 
 const aws = (harness: Harness, options: Options, argv: readonly string[]): number => {
-	const plan = planFrom(harness, options, [...argv, '--via', 'ecs'])
+	const plan = planFrom(harness, options, [...argv, '--via', 'ecs'], flag(argv, '--on') ?? 'local')
 	if (typeof plan === 'string') {
 		process.stderr.write(`drexbot swarm: ${plan}\n`)
 		return 2

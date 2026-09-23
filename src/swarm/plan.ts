@@ -96,6 +96,8 @@ export interface PlanInput {
 	/** "PORT=HOST:PORT ..." for each bee's relay, when the store is not reachable as its own URL. */
 	readonly forward?: string
 	readonly run?: string
+	/** Put before every bee's id when one run spans several hosts, so no two bees share one. */
+	readonly beePrefix?: string
 }
 
 /** The plan, or the reason there cannot be one. */
@@ -128,7 +130,7 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	const order = (kind: BeeKind, n: number): BeeOrder => {
 		const size = kind === 'browser' ? shape.browser : shape.protocol
 		const concurrency = kind === 'browser' ? shape.browser.workers : shape.protocol.users
-		const id = `${kind}-${n + 1}`
+		const id = `${input.beePrefix === undefined ? '' : `${input.beePrefix}-`}${kind}-${n + 1}`
 		return {
 			id,
 			kind,
