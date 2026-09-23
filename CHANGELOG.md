@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 **`drexbot swarm` puts load on a store from bees in containers, and blends two kinds.** A browser bee is Chromium walking the store's pages with a few workers; a protocol bee is k6 users asking for the same pages over plain HTTP. A few of the first beside many of the second gives realistic pages and real volume in one run, reported as one result: per stage and per kind, and time to first byte for the store under both. Both read the pages from the store baseline, and both only read. Bees run on this machine or, through Docker over SSH, on another one listed in `~/.config/drexbot/swarm-hosts` with a budget the run has to fit. No store is loaded unless its origin is in `~/.config/drexbot/swarm-targets`, and none is by default.
 

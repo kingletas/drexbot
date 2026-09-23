@@ -1,6 +1,6 @@
 {
 	"name": "drexbot",
-	"version": "0.1.6",
+	"version": "0.2.0",
 	"description": "Regression, acceptance, behaviour and performance testing for a Magento storefront",
 	"license": "MIT",
 	"author": "Luis Tineo <code@kingletas.com>",
