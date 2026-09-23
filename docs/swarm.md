@@ -55,18 +55,19 @@ The browser image is Playwright's, about 2.5 GB; the protocol image is k6's, und
 drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --protocol-users 200
 ```
 
-| Flag                                   | Default        | Meaning                                                         |
-| -------------------------------------- | -------------- | --------------------------------------------------------------- |
-| `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                     |
-| `--env`                                | `local`        | Whose store baseline to read                                    |
-| `--on`                                 | `local`        | A bee host from `swarm-hosts`, or this machine                  |
-| `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator            |
-| `--seconds`                            | `60`           | Seconds of load; at least 10                                    |
-| `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                      |
-| `--browser-cpus`, `--browser-memory`   | `2`, `2g`      | Each browser bee's size                                         |
-| `--protocol-bees`, `--protocol-users`  | `1`, `50`      | How many protocol bees, and k6 users in each                    |
-| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                        |
-| `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run) |
+| Flag                                   | Default        | Meaning                                                                 |
+| -------------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                             |
+| `--env`                                | `local`        | Whose store baseline to read                                            |
+| `--on`                                 | `local`        | A bee host from `swarm-hosts`, or this machine                          |
+| `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator                    |
+| `--seconds`                            | `60`           | Seconds of load; at least 10                                            |
+| `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                              |
+| `--browser-cpus`, `--browser-memory`   | `2`, `2g`      | Each browser bee's size                                                 |
+| `--protocol-bees`, `--protocol-users`  | `1`, `50`      | How many protocol bees, and k6 users in each                            |
+| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                                |
+| `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)         |
+| `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on |
 
 **The bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
 

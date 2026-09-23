@@ -57,6 +57,9 @@ Flags for run and aws:
                           (defaults 1, 50, 1, 1g: 512m ran out at 400 users)
   --forward PORT=HOST:PORT   relay inside each bee, for a store only reachable by
                           another address than its own URL
+  --network NAME          with --via docker: start the bees on a Docker network the
+                          store is on, so a store on the bee host is reached
+                          container to container, with no port opened
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
@@ -164,7 +167,7 @@ const run = async (
 		}
 		launcher = ecsLauncher(endpoint, docker)
 	} else {
-		launcher = dockerLauncher(docker)
+		launcher = dockerLauncher(docker, flag(argv, '--network'))
 	}
 
 	const stop = { requested: false }
