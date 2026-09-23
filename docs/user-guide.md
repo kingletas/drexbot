@@ -28,6 +28,7 @@ Every command, every flag and every verdict, in plain words. If you are here to 
 | `browser`                           | Start Chromium once, and say what to install if it can't        |
 | `probe --target magento`            | Report whether the suite could drive this site, judging nothing |
 | `plan --target magento [--changed]` | Say what a run would do, and do none of it                      |
+| `swarm run --url URL`               | Load the store from bees in containers; see [Swarm](swarm.md)   |
 | `selfcheck`                         | Prove the harness against its own stub, with no store involved  |
 | `targets`                           | List the targets and the suites each one offers                 |
 | `coverage [--target magento]`       | Check the sign-off sheet against the checks that fill it        |

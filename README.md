@@ -14,6 +14,7 @@ storefront.
 | [Getting started](docs/getting-started.md)              | You know what a harness is. Ten minutes                       |
 | [User guide](docs/user-guide.md)                        | Every command, every flag, every verdict                      |
 | [Configuration](docs/configuration.md)                  | The environment it reads, and the files it keeps              |
+| [Swarm](docs/swarm.md)                                  | Load from browser and protocol bees in containers, recorded   |
 | [Architecture](docs/architecture.md)                    | Kernel and adapter, and how a change gets made                |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                      | The shape a change should arrive in, and how a release is cut |
 | [SECURITY.md](SECURITY.md)                              | The model, and where to report something                      |

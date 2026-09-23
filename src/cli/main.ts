@@ -3,6 +3,7 @@ import { WORKSPACE } from '../workspace.js'
 import { magentoTarget } from '../magento/adapter.js'
 import { captureBaseline } from './commands/baseline.js'
 import { checkBrowser } from './commands/browser.js'
+import { swarmCommand } from './commands/swarm.js'
 
 const harness: Harness = {
 	name: 'drexbot',
@@ -20,5 +21,10 @@ process.exitCode = await runCli(harness, process.argv.slice(2), {
 	browser: {
 		usage: 'browser                    Start Chromium once, and say what to install if it cannot',
 		run: () => checkBrowser(),
+	},
+	swarm: {
+		usage:
+			'swarm COMMAND              Load a store from bees in containers; `swarm help` lists them',
+		run: (self, options, argv) => swarmCommand(self, options, argv),
 	},
 })

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**`drexbot swarm` puts load on a store from bees in containers, and blends two kinds.** A browser bee is Chromium walking the store's pages with a few workers; a protocol bee is k6 users asking for the same pages over plain HTTP. A few of the first beside many of the second gives realistic pages and real volume in one run, reported as one result: per stage and per kind, and time to first byte for the store under both. Both read the pages from the store baseline, and both only read. Bees run on this machine or, through Docker over SSH, on another one listed in `~/.config/drexbot/swarm-hosts` with a budget the run has to fit. No store is loaded unless its origin is in `~/.config/drexbot/swarm-targets`, and none is by default.
+
+**Every run is recorded and compared.** A record goes to `results/swarm/` and is set beside the last run of the same shape against the same store, with the change in throughput and latency. Percentiles come from histograms every bee writes, which add up exactly across bees.
+
+**Every run ends with its containers removed, and the removal checked.** That holds when the run ends, when it is stopped with Ctrl-C, and when a bee fails to start. Every bee also stops itself at a hard lifetime, so a conductor killed outright leaves stopped containers at worst, and `drexbot swarm sweep` removes those.
+
+**`--via ecs` starts the bees as ECS tasks on a local emulator, and `drexbot swarm aws` prints the same run for AWS.** The ECS client refuses any endpoint that is not this machine, so it cannot reach AWS. It caps each container itself, and checks teardown in Docker, because an emulator ignores a task's limits and leaves its containers behind. The AWS path is printed as commands, one per block, each saying what it creates or destroys, and has not been run against AWS; we need more testing.
+
+**`drexbot swarm measure` finds how much load one bee of a given size drives,** against a caching proxy in front of the store so the store is never the bottleneck. On a Luma storefront it showed that a browser bee needs two CPUs and a protocol bee 1 GiB for a few hundred users, and those are the defaults.
+
 ## 0.1.6
 
 **A preflight the store answers with something other than 200 now says what could be wrong.** A run against a store whose `/magento_version` answered 404 blocked all six suites on one line, _https://store.test/magento_version answered 404_, and gave nobody anything to act on. The status now arrives with the reply's content type, whether the body looks like an HTML error page, and a candidate cause when the answer carries one to name. An HTML error page with Magento's own markup in it says the store answered and does not serve this route, which is what a headless or route-narrowed storefront does, and what a base URL missing a store-code prefix does. An HTML error page without that markup says something in front of the store can produce it, either a cache or proxy answering before Magento sees the path or a front end that is not this store, and names what terminates TLS as the thing to check. A 404 carrying nothing to attribute it to still gets the status, the content type and the body, and no hint: a store that is simply absent is not evidence of anything else. A redirect names the address it points at, since redirects are here requested and never followed. A 401, a 403, a 503 and a gateway status each name what produces them. The block itself is unchanged, and a run that cannot say what it tested still runs nothing.

@@ -32,6 +32,12 @@ export default tseslint.config(
 		rules: { 'no-console': 'off' },
 	},
 	{
+		// The protocol bee runs inside k6, not Node: plain JavaScript with k6's globals and no type information.
+		files: ['bees/**/*.js'],
+		...tseslint.configs.disableTypeChecked,
+		languageOptions: { globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' } },
+	},
+	{
 		// node:test's describe/it return a promise nobody is meant to await, and a
 		// test double for an async collaborator often has nothing to await.
 		files: ['**/tests/**/*.ts', '**/fixtures/**/*.ts', '**/selfcheck/**/*.ts'],

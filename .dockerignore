@@ -1,0 +1,4 @@
+# Docker builds from the repository root send only what the bee images copy.
+*
+!dist/src/bee/
+!bees/
