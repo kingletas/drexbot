@@ -62,8 +62,10 @@ test: build ## Unit-test drexbot, under a runner that is not the harness
 .PHONY: install
 install: build ## Put drexbot on PATH
 	@mkdir -p $(PREFIX)
-	@printf '#!/usr/bin/env bash\nexec %s/bin/drexbot "$$@"\n' '$(CURDIR)' > $(PREFIX)/drexbot
-	@chmod +x $(PREFIX)/drexbot
+	@# install(1) replaces the launcher, so a copy left read-only does not stop a reinstall.
+	@tmp=$$(mktemp) && \
+		printf '#!/usr/bin/env bash\nexec %s/bin/drexbot "$$@"\n' '$(CURDIR)' > "$$tmp" && \
+		install -m 0755 "$$tmp" "$(PREFIX)/drexbot"; rc=$$?; rm -f "$$tmp"; exit $$rc
 	@echo "installed $(PREFIX)/drexbot -> $(CURDIR)/bin/drexbot"
 
 .PHONY: baseline
