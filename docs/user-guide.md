@@ -17,6 +17,7 @@ Every command, every flag and every verdict, in plain words. If you are here to 
 - [Notifications](#notifications)
 - [Schedules](#schedules)
 - [Exit codes](#exit-codes)
+- [Driving a checkout from a script](#driving-a-checkout-from-a-script)
 - [Things that surprise people](#things-that-surprise-people)
 
 ## The commands
@@ -267,6 +268,12 @@ While a run is in flight it holds a lock under `results/.locks`, so a schedule c
 | `3`  | The run finished and the channel couldn't be told. The verdict is above it |
 
 `3` is worth its own code because the run is still valid. Losing the message isn't the same as losing the answer.
+
+## Driving a checkout from a script
+
+Two traps fail quietly. First, the form key: with full page caching on, `Magento\PageCache\Plugin\RegisterFormKeyFromCookie` adopts the `form_key` cookie into the session, and the browser invents that value in JavaScript. A plain HTTP client never receives a `Set-Cookie: form_key`, so add-to-cart redirects with no line added and every page below it measures an empty cart. Invent a 16-character alphanumeric value, set it as the cookie and post the same value; don't look for it in a response header. Second, MSI reservations: repeated test orders make a product unsalable through `inventory_reservation` rows while `cataloginventory_stock_item.qty` and `inventory_source_item.quantity` both still read 100, so every order fails and nothing says why. Clear `inventory_reservation`, raise `inventory_source_item.quantity` and reindex `inventory`. Turning off "Decrease Stock When Order is Placed" also works, but it changes the work placing an order does, which spoils the thing being measured.
+
+The guest-cart REST flow needs no form key and is the reliable way to place orders: `POST /rest/V1/guest-carts`, then `items`, `estimate-shipping-methods`, `shipping-information`, and `PUT .../order` with `checkmo`. `DISPOSABLE=no` on a Kapelos site blocks `kapelos orders` and doesn't block the storefront or the REST API; `kapelos snapshot save` is what makes repeated order placement safe there.
 
 ## Things that surprise people
 
