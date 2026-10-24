@@ -114,5 +114,18 @@ export const answerShippingStep = async (session: PageSession, shopper: Shopper)
 	// A rate only appears once the address is complete enough to price.
 	await (await find('shippingMethod', { timeoutMs: 120_000 })).first().check()
 	await (await find('checkoutNext', { unique: true })).click()
-	await (await find('paymentStep', { timeoutMs: 120_000 })).first().waitFor()
+	await waitForPaymentStep(session)
+}
+
+/**
+ * Waits for checkout to show the payment step. Luma keeps the step in the page,
+ * hidden, from the moment checkout opens, so only a visible one counts, and a
+ * step that never shows fails quoting what the store said, such as a refused
+ * shipping method.
+ */
+export const waitForPaymentStep = async (
+	session: PageSession,
+	timeoutMs = 120_000,
+): Promise<void> => {
+	await session.find('paymentStep', { visible: true, timeoutMs })
 }

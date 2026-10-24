@@ -13,6 +13,7 @@ export type Theme =
 	| 'erroring'
 	| 'checkout-shipping'
 	| 'checkout-payment'
+	| 'checkout-refused'
 	| 'checkout-login-first'
 	| 'checkout-email-late'
 
@@ -65,11 +66,13 @@ const ERRORING = `<!doctype html><html><body>
 
 // Luma's one-page checkout renders the payment step into the DOM from the start
 // and hides it, so every paymentStep candidate matches on the shipping step.
-const checkout = (paymentShown: boolean): string => `<!doctype html><html><body>
+// A refusal is the notice Luma shows on the shipping step when "Next" is refused.
+const checkout = (paymentShown: boolean, refusal = ''): string => `<!doctype html><html><body>
   <ol class="opc-progress-bar"><li>Shipping</li><li>Review &amp; Payments</li></ol>
   <ol id="checkoutSteps" class="opc">
     <li id="shipping" class="checkout-shipping-address"${paymentShown ? ' style="display: none;"' : ''}>
       <input id="customer-email" name="username" type="email">
+      ${refusal === '' ? '' : `<div role="alert" class="message notice"><span>${refusal}</span></div>`}
     </li>
     <li id="payment" class="checkout-payment-method"${paymentShown ? '' : ' style="display: none;"'}>
       <div id="checkout-step-payment" class="step-content">
@@ -106,6 +109,10 @@ const PAGES: Readonly<Record<Theme, string>> = {
 	erroring: ERRORING,
 	'checkout-shipping': checkout(false),
 	'checkout-payment': checkout(true),
+	'checkout-refused': checkout(
+		false,
+		'The shipping method is missing. Select the shipping method and try again.',
+	),
 	'checkout-login-first': checkoutLoginFirst(),
 	'checkout-email-late': checkoutLoginFirst(1_000),
 }

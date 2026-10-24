@@ -4,6 +4,7 @@ import { startThemeServer, type ThemeServer } from '../fixtures/theme-pages.js'
 import { DriftRecorder, judgeDrift, recordDrift, emptyDrift } from 'harness-kernel'
 import { BrowserSurface } from '../src/surfaces/browser.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from '../src/magento/selectors.js'
+import { waitForPaymentStep } from '../src/magento/shopper.js'
 
 let server: ThemeServer
 
@@ -249,5 +250,28 @@ describe('waiting for an entry whose first match in the page is hidden', () => {
 
 		assert.ok(result >= 900, `returned after ${Math.round(result)}ms, before the field was shown`)
 		assert.equal(recorder.best().get('checkoutEmail')?.index, 0)
+	})
+})
+
+describe('the payment step after Next', () => {
+	it('fails quoting the store when checkout stays on the shipping step', async () => {
+		// The step is in the page, hidden, the whole time, so a wait that accepts a
+		// hidden match times out without ever reading the refusal beside it.
+		await drive('checkout-refused', async session => {
+			const failure = await waitForPaymentStep(session, 500).then(
+				() => undefined,
+				(error: Error) => error,
+			)
+
+			assert.ok(failure, 'expected a refused shipping step to fail')
+			assert.match(
+				failure.message,
+				/The page is saying: notice — "The shipping method is missing\. Select the shipping method and try again\."/,
+			)
+		})
+	})
+
+	it('returns once the payment step is shown', async () => {
+		await drive('checkout-payment', session => waitForPaymentStep(session, 500))
 	})
 })
