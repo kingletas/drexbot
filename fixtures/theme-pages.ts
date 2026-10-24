@@ -16,6 +16,8 @@ export type Theme =
 	| 'checkout-refused'
 	| 'checkout-login-first'
 	| 'checkout-email-late'
+	| 'cart-filled'
+	| 'cart-refused'
 
 const SEMANTIC = `<!doctype html><html><body>
   <h1>Search results</h1>
@@ -101,6 +103,19 @@ const checkoutLoginFirst = (revealAfterMs?: number): string => `<!doctype html><
   </script>
 </body></html>`
 
+// Luma's cart page after an add the store refused: no row, and the reason in
+// the messages block, as a store out of a variant's stock renders it.
+const cart = (row: boolean, reason = ''): string => `<!doctype html><html><body>
+  <div class="page messages"><div data-placeholder="messages"></div>
+    <div>${
+			reason === ''
+				? ''
+				: `<div class="message-error error message" data-ui-id="message-error"><div>${reason}</div></div>`
+		}</div>
+  </div>
+  ${row ? '<table id="shopping-cart-table"><tbody class="cart item"><tr><td>A shirt</td></tr></tbody></table>' : '<div class="cart-empty"><p>You have no items in your shopping cart.</p></div>'}
+</body></html>`
+
 const PAGES: Readonly<Record<Theme, string>> = {
 	semantic: SEMANTIC,
 	themed: THEMED,
@@ -115,6 +130,8 @@ const PAGES: Readonly<Record<Theme, string>> = {
 	),
 	'checkout-login-first': checkoutLoginFirst(),
 	'checkout-email-late': checkoutLoginFirst(1_000),
+	'cart-filled': cart(true),
+	'cart-refused': cart(false, 'Not enough items for sale'),
 }
 
 export interface ThemeServer {

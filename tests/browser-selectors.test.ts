@@ -4,7 +4,7 @@ import { startThemeServer, type ThemeServer } from '../fixtures/theme-pages.js'
 import { DriftRecorder, judgeDrift, recordDrift, emptyDrift } from 'harness-kernel'
 import { BrowserSurface } from '../src/surfaces/browser.js'
 import { LUMA_MESSAGES, LUMA_PROFILE } from '../src/magento/selectors.js'
-import { waitForPaymentStep } from '../src/magento/shopper.js'
+import { cartHoldsRow, waitForPaymentStep } from '../src/magento/shopper.js'
 
 let server: ThemeServer
 
@@ -273,5 +273,25 @@ describe('the payment step after Next', () => {
 
 	it('returns once the payment step is shown', async () => {
 		await drive('checkout-payment', session => waitForPaymentStep(session, 500))
+	})
+})
+
+describe('the cart after an add', () => {
+	it('fails quoting the store when the add was refused and the cart is empty', async () => {
+		// The store answers the add with 200 either way; only the page says why the row is missing.
+		await drive('cart-refused', async session => {
+			const failure = await cartHoldsRow(session, 200, 500).then(
+				() => undefined,
+				(error: Error) => error,
+			)
+
+			assert.ok(failure, 'expected an empty cart to fail')
+			assert.match(failure.message, /answered the add with 200/)
+			assert.match(failure.message, /The page is saying: error — "Not enough items for sale"/)
+		})
+	})
+
+	it('returns when the cart holds a row', async () => {
+		await drive('cart-filled', session => cartHoldsRow(session, 200, 500))
 	})
 })

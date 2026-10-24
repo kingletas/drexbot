@@ -33,12 +33,27 @@ export const fillCart = async (session: PageSession, store: StoreBaseline): Prom
 	const answered = (await added).status()
 
 	await session.page.goto(`${store.baseUrl}/checkout/cart/`, { waitUntil: 'domcontentloaded' })
-	// Asked rather than found: this store accepts an add and then serves a cart
-	// without it, and reporting that as a selector nobody can find is the
-	// store-is-broken reading rather than what happened.
-	if (!(await session.present('cartRow', { timeoutMs: 30_000 }))) {
+	await cartHoldsRow(session, answered)
+}
+
+/**
+ * Fails when the cart page holds no row after an add the store answered.
+ * Asked rather than found: a store can accept an add and then serve a cart
+ * without it, and reporting that as a selector nobody can find is the
+ * store-is-broken reading rather than what happened.
+ */
+export const cartHoldsRow = async (
+	session: PageSession,
+	answered: number,
+	timeoutMs = 30_000,
+): Promise<void> => {
+	if (!(await session.present('cartRow', { timeoutMs }))) {
+		// A refused add answers 200 too, so the store's own words, such as a
+		// variant out of stock, are the only account of why the row is missing.
+		const saying = await session.says()
 		throw new AssertionFailure(
-			`the store answered the add with ${answered} and the cart it then served holds no row`,
+			`the store answered the add with ${answered} and the cart it then served holds no row` +
+				(saying === '' ? '' : `\nThe page is saying: ${saying}`),
 		)
 	}
 }

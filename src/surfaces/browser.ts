@@ -26,6 +26,8 @@ export interface PageSession {
 	readonly find: (entry: string, options?: ResolveOptions) => Promise<Locator>
 	/** True when the entry resolves; records the winner just the same. */
 	readonly present: (entry: string, options?: ResolveOptions) => Promise<boolean>
+	/** What the page is telling the shopper, as quoted in a failure, or an empty string. */
+	readonly says: () => Promise<string>
 }
 
 /** What a check lends the browser: where to leave a recording, and when to give up. */
@@ -378,6 +380,10 @@ export class BrowserSurface {
 			present: async (entry, options = {}) => {
 				where.step = `looking for "${entry}"`
 				return (await this.resolve(page, entry, options)) !== null
+			},
+			says: async () => {
+				where.step = "reading the page's messages"
+				return describeMessages(page, this.options.messages ?? [], this.untimedCallMs)
 			},
 		}
 	}
