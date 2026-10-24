@@ -3,7 +3,15 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
 	{
-		ignores: ['node_modules/**', '**/dist/**', '**/results/**', '**/baselines/**', '**/ledger/**'],
+		// .claude/ holds worktrees, each a checkout of its own, linted from its own root.
+		ignores: [
+			'node_modules/**',
+			'**/dist/**',
+			'**/results/**',
+			'**/baselines/**',
+			'**/ledger/**',
+			'.claude/**',
+		],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommendedTypeChecked,
