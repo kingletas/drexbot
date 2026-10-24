@@ -10,6 +10,18 @@ export const LINE_TAG = 'bee/1'
 
 export type BeeKind = 'browser' | 'protocol'
 
+/**
+ * A stage named with this prefix counts whole shopper journeys, one sample per
+ * journey, rather than requests: `journey:order` and the like. It is kept out
+ * of every request count and rate.
+ */
+export const JOURNEY_PREFIX = 'journey:'
+
+export const isJourneyStage = (stage: string): boolean => stage.startsWith(JOURNEY_PREFIX)
+
+/** The checkout steps a journey times, in the order a shopper reaches them. */
+export const CHECKOUT_STAGES = ['cart', 'checkout', 'shipping', 'place-order', 'confirmation']
+
 /** Counts for one stage over one window; windows add, so a killed bee loses only its last one. */
 export interface StageWindow {
 	readonly drexbot: typeof LINE_TAG
