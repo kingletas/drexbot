@@ -10,10 +10,11 @@ export type Mix = Readonly<Record<Journey, number>>
 export type MixName = 'browse' | 'normal-day' | 'checkout-stress'
 
 /**
- * Visitor-to-order conversion: 1.97%, IRP Commerce, all UK ecommerce markets,
- * September 2026, https://www.irpcommerce.com/en/gb/ecommercemarketdata.aspx.
+ * Visitor-to-order conversion: 1.62%, IRP Commerce, the UK Fashion Clothing &
+ * Accessories market, September 2026, since the store sells clothing,
+ * https://www.irpcommerce.com/en/gb/ecommercemarketdata.aspx?Market=3.
  */
-export const NORMAL_DAY_ORDER = 0.0197
+export const NORMAL_DAY_ORDER = 0.0162
 
 /**
  * Average cart abandonment: 70.22%, Baymard Institute,

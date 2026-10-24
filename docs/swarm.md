@@ -77,11 +77,11 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 
 **`--mix` makes each browser worker a stream of shoppers**, one new shopper per journey, each in a fresh browser so every cart starts empty. A shopper only browses (every page in `BEE_PATHS` once), adds the baseline's product to the cart and leaves, or checks out as a guest. Protocol bees always browse.
 
-| Mix               | Browse | Cart and leave | Order | Where the figures come from                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------- | ------ | -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browse`          | 100%   | 0              | 0     | The bee as it always was: pages in a loop, one long-lived browser per worker                                                                                                                                                                                                                                                                                                |
-| `normal-day`      | 93.38% | 4.65%          | 1.97% | Orders: visitor-to-order conversion of 1.97%, IRP Commerce, all UK ecommerce markets, September 2026 ([market data](https://www.irpcommerce.com/en/gb/ecommercemarketdata.aspx)). Carts: Baymard Institute's average cart abandonment of 70.22% ([list](https://baymard.com/lists/cart-abandonment-rate)), so carts are orders / 0.2978 and the abandoned ones are the rest |
-| `checkout-stress` | 60%    | 0              | 40%   | A chosen stress level, not a published figure                                                                                                                                                                                                                                                                                                                               |
+| Mix               | Browse | Cart and leave | Order | Where the figures come from                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ------ | -------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browse`          | 100%   | 0              | 0     | The bee as it always was: pages in a loop, one long-lived browser per worker                                                                                                                                                                                                                                                                                                                                                                                  |
+| `normal-day`      | 94.56% | 3.82%          | 1.62% | Orders: visitor-to-order conversion of 1.62%, IRP Commerce, the UK Fashion Clothing & Accessories market, September 2026, since a Luma store sells clothing ([market data](https://www.irpcommerce.com/en/gb/ecommercemarketdata.aspx?Market=3)). Carts: Baymard Institute's average cart abandonment of 70.22% across industries ([list](https://baymard.com/lists/cart-abandonment-rate)), so carts are orders / 0.2978 and the abandoned ones are the rest |
+| `checkout-stress` | 60%    | 0              | 40%   | A chosen stress level, not a published figure                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 **A mix that orders places real orders, so it needs `MAGENTO_DISPOSABLE=1`,** the same permission the checks that write need, and nothing else grants it. The bee refuses on its own as well, unless the plan handed it `BEE_DISPOSABLE=1`. Every order is a guest paying by Check / Money order, so no card number is ever typed; a store without that method fails the order at its last step. Each order takes one of the product's stock, and a store that runs out answers the add and keeps the cart empty, which shows as failed `cart` steps.
 
@@ -95,18 +95,27 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | `place-order`  | choosing Check / Money order   | the store answering the order; choosing sends nothing, so it is timed with placing |
 | `confirmation` | the store answering the order  | the success page showing                                                           |
 
-**The record reads the shoppers as ratios:** the mix set beside the mix the run drew, how many journeys of each kind were served, each step's p50 and p95, the step that takes the largest share of the steps' p95 time, and orders per minute per store CPU when `--store-cpus` gives the store's cap. Never shoppers per minute, which says nothing about a store with other caps. A short run draws few journeys, so the mix drawn wanders from the mix set; both are printed so that is visible.
+**Capture the store's baseline first.** A run reads its product, pages and base URL from the baseline for `--env`, so a store nobody has baselined on this machine is refused with _no store baseline has been captured_:
+
+```sh
+drexbot baseline --target magento --url http://localhost:8080 --env shop
+MAGENTO_DISPOSABLE=1 drexbot swarm run --env shop --url http://localhost:8080 --mix checkout-stress --protocol-bees 0 --seconds 180
+```
+
+At two workers a checkout takes about half a minute, so a run shorter than about three minutes may draw no order at all.
+
+**The record reads the shoppers as ratios:** the mix set beside the mix the run drew, how many journeys of each kind were served, each step's p50 and p95, the step that takes the largest share of the steps' p95 time, and orders per minute per store CPU when `--store-cpus` gives the store's cap. Never shoppers per minute, which says nothing about a store with other caps. A short run draws few journeys, so the mix drawn wanders from the mix set; both are printed so that is visible. An example, with made-up figures:
 
 ```text
   shoppers, mix normal-day: 100 journeys
-    set     browse 93.38%   cart and leave 4.65%   order 1.97%
-    drawn   browse 92.00%   cart and leave 3.00%   order 5.00%
-    served  browse 92 of 92   cart and leave 3 of 3   order 5 of 5
+    set     browse 94.56%   cart and leave 3.82%   order 1.62%
+    drawn   browse 94.00%   cart and leave 3.00%   order 3.00%
+    served  browse 94 of 94   cart and leave 3 of 3   order 3 of 3
   checkout steps, the whole step as the shopper waited for it:
-    cart           p50 2465 ms   p95 3081 ms   0 of 8 failed
+    cart           p50 2465 ms   p95 3081 ms   0 of 6 failed
     ...
   gives first: checkout, 34.71% of the steps' p95 time
-  orders placed: 5; give --store-cpus to read them per store CPU
+  orders placed: 3; give --store-cpus to read them per store CPU
 ```
 
 A checkout journey is not started with less than a minute of load left, and a run with a mix gives each bee three minutes past its load instead of one, so a checkout begun near the end can finish.

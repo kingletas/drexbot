@@ -53,8 +53,8 @@ const envOf = (plan: RunPlan | string): Readonly<Record<string, string>> => {
 describe('the mix of shoppers', () => {
 	it('builds a normal day from the two cited figures, and adds up to every shopper', () => {
 		const day = MIXES['normal-day']
-		assert.equal(day.order, 0.0197)
-		assert.equal(NORMAL_DAY_ORDER, 0.0197)
+		assert.equal(day.order, 0.0162)
+		assert.equal(NORMAL_DAY_ORDER, 0.0162)
 		assert.equal(CART_ABANDONMENT, 0.7022)
 		// Of the shoppers who fill a cart, 70.22% leave it.
 		assert.ok(Math.abs(day.cart / (day.cart + day.order) - 0.7022) < 1e-9)
@@ -67,10 +67,10 @@ describe('the mix of shoppers', () => {
 	it('lands a roll on orders first, then carts, then browsing', () => {
 		const day = MIXES['normal-day']
 		assert.equal(journeyFor(day, 0), 'order')
-		assert.equal(journeyFor(day, 0.0196), 'order')
-		assert.equal(journeyFor(day, 0.0197), 'cart')
-		assert.equal(journeyFor(day, 0.066), 'cart')
-		assert.equal(journeyFor(day, 0.067), 'browse')
+		assert.equal(journeyFor(day, 0.0161), 'order')
+		assert.equal(journeyFor(day, 0.0162), 'cart')
+		assert.equal(journeyFor(day, 0.054), 'cart')
+		assert.equal(journeyFor(day, 0.055), 'browse')
 		assert.equal(journeyFor(MIXES.browse, 0), 'browse')
 	})
 })
