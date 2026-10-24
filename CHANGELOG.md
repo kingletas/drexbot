@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+**An add to cart the store refused now says why.** A store out of a variant's stock still answers the add with 200 and then serves an empty cart, so the checkout checks failed with only _the cart it then served holds no row_. They now quote what the cart page tells the shopper, such as _Not enough items for sale_, the same way a missing element already does.
+
 **A checkout that stays on the shipping step after "Next" now says what the store said.** Luma keeps the payment step in the page, hidden, from the moment checkout opens, so the wait after "Next" found that hidden copy and then waited for it to appear: 150 seconds, ending in _waiting for locator('#checkout-step-payment') to be visible_ and nothing about why. The wait now accepts only a payment step that is shown, so a stall fails through the same path as any missing element, quoting the page's messages, such as Luma's _The shipping method is missing. Select the shipping method and try again._ It also gives up after 120 seconds rather than 150.
 
 **`make install` works again over a launcher that is read-only.** The launcher was written with a shell redirect, which cannot write into a read-only file, so once a tool manager had locked the installed copy every later install failed with _Permission denied_. It is now put in place with `install(1)`, which replaces the file rather than writing into it.
