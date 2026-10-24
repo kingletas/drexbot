@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+**Browser bees can check out, in a mix you set.** `drexbot swarm run --mix normal-day` makes each browser worker a stream of new shoppers, most browsing, some adding to the cart and leaving, and some placing a guest order paid by Check / Money order, with each step timed: cart, checkout, shipping, placing the order and the confirmation. `normal-day` uses published figures, a visitor-to-order conversion of 1.97% (IRP Commerce, UK, September 2026) and an average cart abandonment of 70.22% (Baymard Institute); `checkout-stress` sends 40% of shoppers to an order. A mix that orders needs `MAGENTO_DISPOSABLE=1`, and the bee refuses on its own without `BEE_DISPOSABLE=1` from the plan. The record reads the shoppers as ratios: the mix set beside the mix drawn, each step's time, the step that gives first, and orders per store CPU when `--store-cpus` names the store's cap. Without `--mix` the bees browse exactly as before.
+
 **`make install` works again over a launcher that is read-only.** The launcher was written with a shell redirect, which cannot write into a read-only file, so once a tool manager had locked the installed copy every later install failed with _Permission denied_. It is now put in place with `install(1)`, which replaces the file rather than writing into it.
 
 ## 0.2.0

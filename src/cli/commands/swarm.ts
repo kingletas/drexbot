@@ -24,6 +24,7 @@ import {
 	type Via,
 } from '../../swarm/plan.js'
 import { reconcile } from '../../swarm/reconcile.js'
+import { isMixName, MIXES, type MixName } from '../../bee/mix.js'
 import {
 	previousFor,
 	readRecords,
@@ -68,6 +69,10 @@ Flags for run and aws:
   --network NAME          with --via docker: start the bees on a Docker network the
                           store is on, so a store on the bee host is reached
                           container to container, with no port opened
+  --mix NAME              what the browser bees' shoppers do: browse, normal-day
+                          or checkout-stress; the last two place orders and need
+                          MAGENTO_DISPOSABLE=1                       (default: browse)
+  --store-cpus N          the CPUs the store is capped at, so orders read per core
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
@@ -113,6 +118,7 @@ const shapeFrom = (argv: readonly string[]): Shape => ({
 		memory: bytesOf(flag(argv, '--protocol-memory') ?? '1g'),
 	},
 	seconds: number(argv, '--seconds', 60),
+	...(flag(argv, '--mix') === undefined ? {} : { mix: flag(argv, '--mix') as MixName }),
 })
 
 /** Everything that can refuse one host's part of a run, checked before anything starts. */
@@ -135,6 +141,13 @@ const planFrom = (
 		environment,
 	)
 	if (!store.captured) return store.uncapturedBecause ?? 'no store baseline'
+	const mix = flag(argv, '--mix')
+	if (mix !== undefined && !isMixName(mix)) {
+		return `--mix is one of ${Object.keys(MIXES).join(', ')}, not "${mix}"`
+	}
+	const storeCpus =
+		flag(argv, '--store-cpus') === undefined ? undefined : number(argv, '--store-cpus', 0)
+	const cartPath = store.simpleProductPath ?? store.configurableProductPath
 	const via = (flag(argv, '--via') ?? 'docker') as Via
 	if (via !== 'docker' && via !== 'ecs') return `--via is docker or ecs, not "${String(via)}"`
 	const host = hostNamed(hostName)
@@ -150,6 +163,9 @@ const planFrom = (
 		...(forward === undefined ? {} : { forward }),
 		...(run === undefined ? {} : { run }),
 		...(beePrefix === undefined ? {} : { beePrefix }),
+		...(cartPath === undefined ? {} : { cartPath }),
+		disposable: process.env['MAGENTO_DISPOSABLE'] === '1',
+		...(storeCpus === undefined || storeCpus === 0 ? {} : { storeCpus }),
 	})
 }
 

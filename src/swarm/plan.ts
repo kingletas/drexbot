@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { StoreBaseline } from '../magento/baseline.js'
 import type { BeeKind } from '../bee/lines.js'
+import { MIXES, type MixName } from '../bee/mix.js'
 import type { BeeHost } from './settings.js'
 
 /**
@@ -28,6 +29,8 @@ export interface Shape {
 		readonly memory: number
 	}
 	readonly seconds: number
+	/** Which journeys the browser bees' shoppers take; unset, they browse as they always have. */
+	readonly mix?: MixName
 }
 
 export interface BeeOrder {
@@ -52,6 +55,7 @@ export interface RunPlan {
 	readonly bees: readonly BeeOrder[]
 	/** Hard limit on each bee's life: its load, its browser's start, and time to write its last lines. */
 	readonly lifetime: number
+	readonly storeCpus?: number
 }
 
 /** The pages both kinds of bee walk, read from the store's own baseline. */
@@ -78,6 +82,7 @@ export const shapeKey = (shape: Shape, host: string, via: Via): string =>
 		`browser ${shape.browser.bees}x${shape.browser.workers}@${shape.browser.cpus}cpu`,
 		`protocol ${shape.protocol.bees}x${shape.protocol.users}@${shape.protocol.cpus}cpu`,
 		`${shape.seconds}s`,
+		...(shape.mix === undefined || shape.mix === 'browse' ? [] : [`mix ${shape.mix}`]),
 		`${host}/${via}`,
 	].join(', ')
 
@@ -98,6 +103,12 @@ export interface PlanInput {
 	readonly run?: string
 	/** Put before every bee's id when one run spans several hosts, so no two bees share one. */
 	readonly beePrefix?: string
+	/** The product a cart or order journey buys. */
+	readonly cartPath?: string
+	/** The store said it may take orders: `MAGENTO_DISPOSABLE=1`, read by the caller. */
+	readonly disposable?: boolean
+	/** The CPUs the store itself is capped at, when the operator knows them, so orders can be read per core. */
+	readonly storeCpus?: number
 }
 
 /** The plan, or the reason there cannot be one. */
@@ -105,6 +116,19 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	const { shape, host } = input
 	if (shape.browser.bees + shape.protocol.bees === 0) return 'a run needs at least one bee'
 	if (shape.seconds < 10) return 'a run needs at least 10 seconds of load to say anything'
+	const mix = MIXES[shape.mix ?? 'browse']
+	if (mix.browse < 1 && shape.browser.bees === 0) {
+		return `the ${shape.mix ?? ''} mix is walked by browser bees, and this run has none`
+	}
+	if (mix.browse < 1 && input.cartPath === undefined) {
+		return `the ${shape.mix ?? ''} mix puts products in carts, and the store baseline names no product to buy`
+	}
+	if (mix.order > 0 && input.disposable !== true) {
+		return (
+			`the ${shape.mix ?? ''} mix places orders, which nothing here can take back; ` +
+			'set MAGENTO_DISPOSABLE=1 only for a store you would not mind finding test orders in'
+		)
+	}
 
 	const cpus = shape.browser.bees * shape.browser.cpus + shape.protocol.bees * shape.protocol.cpus
 	const memory =
@@ -117,8 +141,9 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	}
 
 	const run = input.run ?? runId()
-	// Starting Chromium and writing the last window both fall outside the load, so the bee is given room for them.
-	const lifetime = shape.seconds + 60
+	// Starting Chromium and writing the last window both fall outside the load, so
+	// the bee is given room for them, and for a checkout begun just before the end.
+	const lifetime = shape.seconds + (mix.browse < 1 ? 180 : 60)
 	const common = {
 		BEE_RUN: run,
 		BEE_URL: input.url,
@@ -126,6 +151,9 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 		BEE_SECONDS: String(shape.seconds),
 		BEE_LIFETIME: String(lifetime),
 		...(input.forward === undefined ? {} : { BEE_FORWARD: input.forward }),
+		...(shape.mix === undefined ? {} : { BEE_MIX: shape.mix }),
+		...(input.cartPath === undefined || mix.browse === 1 ? {} : { BEE_CART_PATH: input.cartPath }),
+		...(mix.order > 0 ? { BEE_DISPOSABLE: '1' } : {}),
 	}
 	const order = (kind: BeeKind, n: number): BeeOrder => {
 		const size = kind === 'browser' ? shape.browser : shape.protocol
@@ -154,5 +182,6 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 			...Array.from({ length: shape.protocol.bees }, (_, n) => order('protocol', n)),
 		],
 		lifetime,
+		...(input.storeCpus === undefined ? {} : { storeCpus: input.storeCpus }),
 	}
 }

@@ -55,21 +55,61 @@ The browser image is Playwright's, about 2.5 GB; the protocol image is k6's, und
 drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --protocol-users 200
 ```
 
-| Flag                                   | Default        | Meaning                                                                 |
-| -------------------------------------- | -------------- | ----------------------------------------------------------------------- |
-| `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                             |
-| `--env`                                | `local`        | Whose store baseline to read                                            |
-| `--on`                                 | `local`        | Bee hosts from `swarm-hosts`, comma-separated, or this machine          |
-| `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator                    |
-| `--seconds`                            | `60`           | Seconds of load; at least 10                                            |
-| `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                              |
-| `--browser-cpus`, `--browser-memory`   | `2`, `2g`      | Each browser bee's size                                                 |
-| `--protocol-bees`, `--protocol-users`  | `1`, `50`      | How many protocol bees, and k6 users in each                            |
-| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                                |
-| `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)         |
-| `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on |
+| Flag                                   | Default        | Meaning                                                                                   |
+| -------------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
+| `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                                               |
+| `--env`                                | `local`        | Whose store baseline to read                                                              |
+| `--on`                                 | `local`        | Bee hosts from `swarm-hosts`, comma-separated, or this machine                            |
+| `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator                                      |
+| `--seconds`                            | `60`           | Seconds of load; at least 10                                                              |
+| `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                                                |
+| `--browser-cpus`, `--browser-memory`   | `2`, `2g`      | Each browser bee's size                                                                   |
+| `--protocol-bees`, `--protocol-users`  | `1`, `50`      | How many protocol bees, and k6 users in each                                              |
+| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                                                  |
+| `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)                           |
+| `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on                   |
+| `--mix NAME`                           | `browse`       | What the browser bees' shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
+| `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
 
-**The bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
+**Without a mix the bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
+
+## Shoppers who check out
+
+**`--mix` makes each browser worker a stream of shoppers**, one new shopper per journey, each in a fresh browser so every cart starts empty. A shopper only browses (every page in `BEE_PATHS` once), adds the baseline's product to the cart and leaves, or checks out as a guest. Protocol bees always browse.
+
+| Mix               | Browse | Cart and leave | Order | Where the figures come from                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | ------ | -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browse`          | 100%   | 0              | 0     | The bee as it always was: pages in a loop, one long-lived browser per worker                                                                                                                                                                                                                                                                                                |
+| `normal-day`      | 93.38% | 4.65%          | 1.97% | Orders: visitor-to-order conversion of 1.97%, IRP Commerce, all UK ecommerce markets, September 2026 ([market data](https://www.irpcommerce.com/en/gb/ecommercemarketdata.aspx)). Carts: Baymard Institute's average cart abandonment of 70.22% ([list](https://baymard.com/lists/cart-abandonment-rate)), so carts are orders / 0.2978 and the abandoned ones are the rest |
+| `checkout-stress` | 60%    | 0              | 40%   | A chosen stress level, not a published figure                                                                                                                                                                                                                                                                                                                               |
+
+**A mix that orders places real orders, so it needs `MAGENTO_DISPOSABLE=1`,** the same permission the checks that write need, and nothing else grants it. The bee refuses on its own as well, unless the plan handed it `BEE_DISPOSABLE=1`. Every order is a guest paying by Check / Money order, so no card number is ever typed; a store without that method fails the order at its last step. Each order takes one of the product's stock, and a store that runs out answers the add and keeps the cart empty, which shows as failed `cart` steps.
+
+**A checkout is timed step by step,** each step from its first action to the store's answer:
+
+| Step           | From                           | To                                                                                 |
+| -------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| `cart`         | choosing the product's options | the store answering the add                                                        |
+| `checkout`     | opening `/checkout/`           | the email field showing                                                            |
+| `shipping`     | filling the address            | the store saving it and the payment step showing                                   |
+| `place-order`  | choosing Check / Money order   | the store answering the order; choosing sends nothing, so it is timed with placing |
+| `confirmation` | the store answering the order  | the success page showing                                                           |
+
+**The record reads the shoppers as ratios:** the mix set beside the mix the run drew, how many journeys of each kind were served, each step's p50 and p95, the step that takes the largest share of the steps' p95 time, and orders per minute per store CPU when `--store-cpus` gives the store's cap. Never shoppers per minute, which says nothing about a store with other caps. A short run draws few journeys, so the mix drawn wanders from the mix set; both are printed so that is visible.
+
+```text
+  shoppers, mix normal-day: 100 journeys
+    set     browse 93.38%   cart and leave 4.65%   order 1.97%
+    drawn   browse 92.00%   cart and leave 3.00%   order 5.00%
+    served  browse 92 of 92   cart and leave 3 of 3   order 5 of 5
+  checkout steps, the whole step as the shopper waited for it:
+    cart           p50 2465 ms   p95 3081 ms   0 of 8 failed
+    ...
+  gives first: checkout, 34.71% of the steps' p95 time
+  orders placed: 5; give --store-cpus to read them per store CPU
+```
+
+A checkout journey is not started with less than a minute of load left, and a run with a mix gives each bee three minutes past its load instead of one, so a checkout begun near the end can finish.
 
 ## Reading the record
 
@@ -164,18 +204,21 @@ DREXBOT_ECS_ENDPOINT=http://127.0.0.1:4566 drexbot swarm run --via ecs --url htt
 
 A bee is any image that reads these variables and writes the `bee/1` lines. Standard output is the one channel every place a bee can run hands back.
 
-| Variable             | Meaning                                                          |
-| -------------------- | ---------------------------------------------------------------- |
-| `BEE_RUN`, `BEE_ID`  | Which run this is, and which bee                                 |
-| `BEE_URL`            | The store, as the store expects to be addressed                  |
-| `BEE_PATHS`          | JSON list of `{stage, path}` to walk                             |
-| `BEE_CONCURRENCY`    | Workers or users                                                 |
-| `BEE_SECONDS`        | Seconds of load, counted once the bee is ready                   |
-| `BEE_LIFETIME`       | Hard limit on the bee's life, enforced by its entrypoint         |
-| `BEE_FORWARD`        | Optional `PORT=HOST:PORT` relays                                 |
-| `BEE_WINDOW_SECONDS` | Browser bee: how often it writes a window of counts (default 10) |
+| Variable             | Meaning                                                            |
+| -------------------- | ------------------------------------------------------------------ |
+| `BEE_RUN`, `BEE_ID`  | Which run this is, and which bee                                   |
+| `BEE_URL`            | The store, as the store expects to be addressed                    |
+| `BEE_PATHS`          | JSON list of `{stage, path}` to walk                               |
+| `BEE_CONCURRENCY`    | Workers or users                                                   |
+| `BEE_SECONDS`        | Seconds of load, counted once the bee is ready                     |
+| `BEE_LIFETIME`       | Hard limit on the bee's life, enforced by its entrypoint           |
+| `BEE_FORWARD`        | Optional `PORT=HOST:PORT` relays                                   |
+| `BEE_WINDOW_SECONDS` | Browser bee: how often it writes a window of counts (default 10)   |
+| `BEE_MIX`            | Browser bee: `browse` (default), `normal-day` or `checkout-stress` |
+| `BEE_CART_PATH`      | Browser bee: the product a cart or order journey buys              |
+| `BEE_DISPOSABLE`     | Browser bee: `1`, and only `1`, lets a mix place orders            |
 
-A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. Windows add up, so a bee stopped early loses only its last one.
+A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
 
 ## What it does not do
 

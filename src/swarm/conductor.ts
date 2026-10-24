@@ -171,6 +171,7 @@ export const conductAcross = async (
 			verified: outcomes.every(outcome => outcome.teardown.verified),
 		},
 		caveats,
+		...(first.plan.storeCpus === undefined ? {} : { storeCpus: first.plan.storeCpus }),
 	}
 }
 

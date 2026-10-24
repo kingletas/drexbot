@@ -1,3 +1,5 @@
+import { isMixName, MIXES, type MixName } from './mix.js'
+
 /**
  * What a bee is told, through its environment only. Environment variables are
  * the one input that reaches a container the same way under Docker, under ECS
@@ -14,6 +16,10 @@ export interface BeeConfig {
 	/** Seconds of load, counted from when the bee is ready rather than from when it started. */
 	readonly seconds: number
 	readonly windowSeconds: number
+	/** Browser bees only: which journeys its shoppers take. `browse` walks pages as before. */
+	readonly mix: MixName
+	/** The product a cart or order journey buys. */
+	readonly cartPath?: string
 }
 
 const required = (env: NodeJS.ProcessEnv, name: string): string => {
@@ -45,6 +51,18 @@ export const readBeeConfig = (env: NodeJS.ProcessEnv): BeeConfig => {
 	) {
 		throw new Error('BEE_PATHS must be a non-empty JSON list of {stage, path}')
 	}
+	const mix = env['BEE_MIX'] ?? 'browse'
+	if (!isMixName(mix)) {
+		throw new Error(`BEE_MIX must be one of ${Object.keys(MIXES).join(', ')}, not "${mix}"`)
+	}
+	const cartPath = env['BEE_CART_PATH'] === '' ? undefined : env['BEE_CART_PATH']
+	if (MIXES[mix].browse < 1 && cartPath === undefined) {
+		throw new Error(`BEE_MIX ${mix} puts products in carts, and BEE_CART_PATH names none`)
+	}
+	// Nothing can take back an order, so the bee asks for its own permission as well as the plan's.
+	if (MIXES[mix].order > 0 && env['BEE_DISPOSABLE'] !== '1') {
+		throw new Error(`BEE_MIX ${mix} places orders, and BEE_DISPOSABLE is not 1`)
+	}
 	return {
 		run: required(env, 'BEE_RUN'),
 		bee: required(env, 'BEE_ID'),
@@ -53,5 +71,7 @@ export const readBeeConfig = (env: NodeJS.ProcessEnv): BeeConfig => {
 		concurrency: Math.floor(positive(env, 'BEE_CONCURRENCY')),
 		seconds: positive(env, 'BEE_SECONDS'),
 		windowSeconds: positive(env, 'BEE_WINDOW_SECONDS', 10),
+		mix,
+		...(cartPath === undefined ? {} : { cartPath }),
 	}
 }

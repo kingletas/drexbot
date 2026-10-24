@@ -1,5 +1,5 @@
 import { countOf, merge, percentile, type Histogram } from '../bee/histogram.js'
-import type { BeeKind, BeeLine, StageWindow } from '../bee/lines.js'
+import { isJourneyStage, type BeeKind, type BeeLine, type StageWindow } from '../bee/lines.js'
 
 /**
  * Every bee's lines, added into one result. Histograms add exactly, so the
@@ -86,7 +86,7 @@ const kindResult = (
 		const sum = stages.get(line.stage) ?? emptySum()
 		stages.set(line.stage, sum)
 		add(sum, line)
-		add(all, line)
+		if (!isJourneyStage(line.stage)) add(all, line)
 	}
 	return {
 		bees: bees.size,
@@ -118,7 +118,7 @@ export const reconcile = (lines: readonly BeeLine[], seconds: number): RunResult
 	let count = 0
 	let failures = 0
 	for (const line of lines) {
-		if (line.event !== 'window') continue
+		if (line.event !== 'window' || isJourneyStage(line.stage)) continue
 		merge(ttfb, line.ttfb)
 		count += line.count
 		failures += line.failures
