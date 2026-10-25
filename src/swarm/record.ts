@@ -111,6 +111,26 @@ const ORDER_PLACED_BY: Readonly<Record<BeeKind, string>> = {
 	protocol: 'place-order',
 }
 
+/** The slowest checkout step's p95, from whichever kinds of bee walked the checkout. */
+export const checkoutP95Of = (record: RunRecord): number | undefined => {
+	const p95s = (['browser', 'protocol'] as const).flatMap(kind =>
+		CHECKOUT_STAGES.flatMap(stage => {
+			const p95 = record.result[kind]?.stages[stage]?.total.p95
+			return p95 === undefined ? [] : [p95]
+		}),
+	)
+	return p95s.length === 0 ? undefined : Math.max(...p95s)
+}
+
+/** Orders that exist: a browser saw the success page, a protocol bee had its order placed. */
+export const ordersOf = (record: RunRecord): number => {
+	const served = (kind: BeeKind, stage: string): number => {
+		const result = record.result[kind]?.stages[stage]
+		return (result?.count ?? 0) - (result?.failures ?? 0)
+	}
+	return served('browser', ORDER_PLACED_BY.browser) + served('protocol', ORDER_PLACED_BY.protocol)
+}
+
 /**
  * The shoppers as ratios: the mix asked for beside the mix the run actually
  * drew, each checkout step's time, the step that gives first, and orders per

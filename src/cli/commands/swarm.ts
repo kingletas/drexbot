@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Harness, Options } from 'harness-kernel'
 import { catalogueFor, loadStore } from '../../magento/baseline.js'
-import { beeLinesIn, CHECKOUT_STAGES } from '../../bee/lines.js'
+import { beeLinesIn } from '../../bee/lines.js'
 import { awsHandover } from '../../swarm/aws.js'
 import {
 	conductAcross,
@@ -11,6 +11,7 @@ import {
 	type HostRun,
 	type Launcher,
 } from '../../swarm/conductor.js'
+import { dayReport, renderDay, writeDay } from '../../swarm/day.js'
 import { deployReport, readLedger } from '../../swarm/deploys.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
@@ -26,8 +27,11 @@ import {
 	type Via,
 } from '../../swarm/plan.js'
 import { reconcile } from '../../swarm/reconcile.js'
+import { shopRun } from '../../swarm/shop.js'
 import { isMixName, MIXES, type MixName } from '../../bee/mix.js'
 import {
+	checkoutP95Of,
+	ordersOf,
 	previousFor,
 	readRecords,
 	recordsDirectory,
@@ -64,6 +68,9 @@ export const SWARM_USAGE = `usage: drexbot swarm COMMAND [flags]
   records   list recorded runs
   measure   how much load one bee of a given size can drive
   step      raise protocol users step by step until the store reaches its knee
+  shop      one run at the rate the time of day calls for, for a timer to start
+  day       DATE --deploy-ledger FILE
+            place the day's runs before, during or after its deploys
 
 Flags for run and aws:
   --url URL               the store; must be in swarm-targets        (default: $MAGENTO_URL)
@@ -106,6 +113,19 @@ Flags for step, beside those for run (it sets the bee counts itself):
                           of the last good step                      (default: 0.1)
   --users-per-bee N       protocol users one bee drives at most      (default: 100)
   --fpm-workers N         PHP-FPM's max_children, so orders read per worker
+
+Flags for shop, beside those for run (it sets --orders itself, and --seconds to the slice):
+  --night HH:MM-HH:MM     the local-time window that holds the daily deploy; it may
+                          cross midnight                             (required)
+  --night-orders N        orders in each slice inside the window     (default: 25)
+  --day-orders N          orders in each slice outside it            (default: 5)
+  --per DURATION          the slice, such as 5m: the run's length and the
+                          timer's interval                           (default: 5m)
+  --seconds N             load for less than the whole slice, so the bees are gone
+                          before the timer's next tick     (default: the slice)
+
+Flags for day: --url URL reports one store, otherwise every store is reported;
+  --deploy-ledger FILE is the deploy tool's audit log                (required)
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
@@ -296,24 +316,53 @@ const run = async (
 	}
 }
 
-/** The slowest checkout step's p95, from whichever kinds of bee walked the checkout. */
-const checkoutP95Of = (record: RunRecord): number | undefined => {
-	const p95s = (['browser', 'protocol'] as const).flatMap(kind =>
-		CHECKOUT_STAGES.flatMap(stage => {
-			const p95 = record.result[kind]?.stages[stage]?.total.p95
-			return p95 === undefined ? [] : [p95]
-		}),
-	)
-	return p95s.length === 0 ? undefined : Math.max(...p95s)
+/** One run at the rate the clock calls for, through the same path as `swarm run`. */
+const shop = async (
+	harness: Harness,
+	options: Options,
+	argv: readonly string[],
+): Promise<number> => {
+	const slice = shopRun(argv, new Date())
+	if (typeof slice === 'string') {
+		process.stderr.write(`drexbot swarm: ${slice}\n`)
+		return 2
+	}
+	say(`shop: ${slice.night ? 'night' : 'day'} rate, ${slice.orders} orders per ${slice.per}`)
+	return run(harness, options, slice.argv)
 }
 
-/** Orders that exist: a browser saw the success page, a protocol bee had its order placed. */
-const ordersOf = (record: RunRecord): number => {
-	const served = (kind: 'browser' | 'protocol', stage: string): number => {
-		const result = record.result[kind]?.stages[stage]
-		return (result?.count ?? 0) - (result?.failures ?? 0)
+/** The day's runs placed against its deploys, printed and written beside the run records. */
+const day = (harness: Harness, options: Options, argv: readonly string[]): number => {
+	const date = argv[0]
+	let report: ReturnType<typeof dayReport>
+	try {
+		const ledger = ledgerFlag(argv)
+		if (date === undefined || date.startsWith('--') || ledger === undefined) {
+			process.stderr.write('usage: drexbot swarm day DATE --deploy-ledger FILE [--url URL]\n')
+			return 2
+		}
+		report = dayReport(
+			date,
+			readRecords(harness.workspace.results),
+			readLedger(ledger),
+			ledger,
+			options.url ?? flag(argv, '--url'),
+		)
+	} catch (cause) {
+		process.stderr.write(
+			`drexbot swarm: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+		)
+		return 2
 	}
-	return served('browser', 'confirmation') + served('protocol', 'place-order')
+	if (typeof report === 'string') {
+		process.stderr.write(`drexbot swarm: ${report}\n`)
+		return 2
+	}
+	process.stdout.write(renderDay(report))
+	if (report.stores.length === 0) return 1
+	const path = writeDay(harness.workspace.results, report)
+	process.stdout.write(`  recorded in ${path.replace(harness.workspace.root, '.')}\n\n`)
+	return 0
 }
 
 const withoutFlags = (argv: readonly string[], names: readonly string[]): string[] => {
@@ -584,6 +633,10 @@ export const swarmCommand = async (
 				return await measure(harness, rest, images(harness), say)
 			case 'step':
 				return await stepTest(harness, options, rest)
+			case 'shop':
+				return await shop(harness, options, rest)
+			case 'day':
+				return day(harness, options, rest)
 			default:
 				process.stderr.write(SWARM_USAGE)
 				return 2
