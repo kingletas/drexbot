@@ -15,6 +15,7 @@ import { deployReport, readLedger } from '../../swarm/deploys.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
+import { ordersFrom } from '../../swarm/orders.js'
 import {
 	planRun,
 	runId,
@@ -84,6 +85,11 @@ Flags for run and aws:
   --mix NAME              what the bees' shoppers do: browse, normal-day or
                           checkout-stress; the last two place orders and need
                           MAGENTO_DISPOSABLE=1                       (default: browse)
+  --orders N --per DURATION
+                          place N orders in every DURATION (60s, 5m, 1h; at least
+                          10s), evenly, from one protocol bee and no browser bees;
+                          needs MAGENTO_DISPOSABLE=1 and a SKU; not with --mix or
+                          --protocol-users
   --sku SKU               the simple product protocol bees add to carts over REST
                           (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
@@ -139,9 +145,10 @@ const say = (message: string): void => {
 	process.stderr.write(`  ${message}\n`)
 }
 
-const shapeFrom = (argv: readonly string[]): Shape => ({
+const shapeFrom = (argv: readonly string[], orders: Shape['orders']): Shape => ({
 	browser: {
-		bees: number(argv, '--browser-bees', 1),
+		// A rate places its orders from a protocol bee alone.
+		bees: number(argv, '--browser-bees', orders === undefined ? 1 : 0),
 		workers: number(argv, '--browser-workers', 2),
 		cpus: number(argv, '--browser-cpus', 2),
 		memory: bytesOf(flag(argv, '--browser-memory') ?? '2g'),
@@ -154,6 +161,7 @@ const shapeFrom = (argv: readonly string[]): Shape => ({
 	},
 	seconds: number(argv, '--seconds', 60),
 	...(flag(argv, '--mix') === undefined ? {} : { mix: flag(argv, '--mix') as MixName }),
+	...(orders === undefined ? {} : { orders }),
 })
 
 /** Everything that can refuse one host's part of a run, checked before anything starts. */
@@ -165,6 +173,8 @@ const planFrom = (
 	run?: string,
 	beePrefix?: string,
 ): RunPlan | string => {
+	const orders = ordersFrom(argv)
+	if (typeof orders === 'string') return orders
 	const url = options.url ?? process.env['MAGENTO_URL']
 	if (url === undefined) return 'name the store with --url, or set MAGENTO_URL'
 	const refusal = refusalFor(url, allowedTargets())
@@ -194,7 +204,7 @@ const planFrom = (
 		stages: stagesOf(store),
 		host,
 		via,
-		shape: shapeFrom(argv),
+		shape: shapeFrom(argv, orders),
 		images: images(harness),
 		...(forward === undefined ? {} : { forward }),
 		...(run === undefined ? {} : { run }),

@@ -65,6 +65,8 @@ export interface BeeEvent {
 	/** Browser workers or protocol virtual users this bee ran. */
 	readonly concurrency: number
 	readonly note?: string
+	/** Protocol bee at a set rate, on its `finished` line: orders k6 could not start because no user was free. */
+	readonly dropped?: number
 }
 
 export type BeeLine = StageWindow | BeeEvent

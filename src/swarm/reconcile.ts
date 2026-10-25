@@ -29,6 +29,8 @@ export interface KindResult {
 	readonly count: number
 	readonly failures: number
 	readonly perSecond: number
+	/** Orders k6 could not start for want of a free user, summed over the bees that said; absent when none did. */
+	readonly dropped?: number
 	readonly ttfb: Percentiles
 	readonly stages: Record<string, StageResult>
 }
@@ -79,6 +81,9 @@ const kindResult = (
 	const mine = lines.filter(line => line.kind === kind)
 	const bees = new Set(mine.map(line => line.bee))
 	if (bees.size === 0) return undefined
+	const dropped = mine.flatMap(line =>
+		line.event === 'finished' && line.dropped !== undefined ? [line.dropped] : [],
+	)
 	const stages = new Map<string, Sum>()
 	const all = emptySum()
 	for (const line of mine) {
@@ -94,6 +99,7 @@ const kindResult = (
 		count: all.count,
 		failures: all.failures,
 		perSecond: Math.round((all.count / seconds) * 10) / 10,
+		...(dropped.length === 0 ? {} : { dropped: dropped.reduce((sum, n) => sum + n, 0) }),
 		ttfb: percentilesOf(all.ttfb),
 		stages: Object.fromEntries(
 			[...stages.entries()].map(([stage, sum]) => [

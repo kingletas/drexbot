@@ -71,6 +71,7 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)                           |
 | `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on                   |
 | `--mix NAME`                           | `browse`       | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
+| `--orders N --per DURATION`            | none           | Orders at a set rate; see [Orders at a set rate](#orders-at-a-set-rate)                   |
 | `--sku SKU`                            | the baseline's | The simple product protocol bees add to carts over REST                                   |
 | `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
 | `--deploy-ledger FILE`                 | none           | A deploy tool's audit log; see [Deploys](#a-run-that-crosses-a-deploy)                    |
@@ -139,6 +140,25 @@ Each request is its own stage with its own counts and histograms, and `cart`, `s
 ```
 
 A checkout journey is not started with less than a minute of load left, and a run with a mix gives each bee three minutes past its load instead of one, so a checkout begun near the end can finish.
+
+### Orders at a set rate
+
+**`--orders N --per DURATION` makes one protocol bee place N orders in every DURATION, evenly,** where a mix places them as a share of shoppers at whatever pace the users run. DURATION is a whole number with `s`, `m` or `h`, such as `60s`, `5m` or `1h`, and at least `10s`. The bee asks k6 for a constant arrival rate: an order is started every DURATION / N whether or not the last one has finished, so a slow store does not slow the load down. Every order is the checkout in the table above, and the record reads it like any other.
+
+```sh
+MAGENTO_DISPOSABLE=1 drexbot swarm run --env shop --url http://localhost:8080 --sku 24-MB01 \
+  --orders 25 --per 5m --seconds 3600
+```
+
+- **It places orders, so it has the gates of a mix that does:** `MAGENTO_DISPOSABLE=1`, a SKU from the baseline or `--sku`, and `BEE_DISPOSABLE=1` handed to the bee by the plan.
+- **It runs alone.** It is refused beside `--mix` or `--protocol-users`, with browser bees (`--browser-bees` defaults to 0 with `--orders`), with more than one protocol bee, and when the run is too short to be asked for one order. A rate shared between bees would drift.
+- **Users are sized from the rate.** The bee starts the users that stay busy when every order takes a minute (orders a second times 60, at least 1) and may run twice as many. An order that finds none free is not started, and k6 counts it as dropped.
+- **The record counts what happened to the orders:** one line with the orders asked for (N times the run's seconds over DURATION, rounded down), started, placed, failed and dropped. Dropped orders are the ones the store was too slow to be given, so a store that falls behind reads as one that was asked for more than it took, not as one that was asked for less.
+- **Runs at different rates are not compared with each other,** because the rate is part of the run's shape.
+
+```text
+  orders at 25 every 5m: asked for 300, started 296, placed 290, failed 6, dropped 4
+```
 
 ## Reading the record
 
@@ -315,8 +335,10 @@ A bee is any image that reads these variables and writes the `bee/1` lines. Stan
 | `BEE_CART_PATH`      | Browser bee: the product a cart or order journey buys              |
 | `BEE_CART_SKU`       | Protocol bee: the simple product a cart or order journey adds      |
 | `BEE_DISPOSABLE`     | Either kind: `1`, and only `1`, lets a mix place orders            |
+| `BEE_ORDERS`         | Protocol bee: orders to place in every `BEE_PER_SECONDS`, evenly   |
+| `BEE_PER_SECONDS`    | Protocol bee: the interval of `BEE_ORDERS`, at least 10            |
 
-A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
+A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. A protocol bee at a set rate adds `dropped` to its `finished` line: the orders k6 could not start for want of a free user. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
 
 ## What it does not do
 
