@@ -68,14 +68,15 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                                                  |
 | `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)                           |
 | `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on                   |
-| `--mix NAME`                           | `browse`       | What the browser bees' shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
+| `--mix NAME`                           | `browse`       | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
+| `--sku SKU`                            | the baseline's | The simple product protocol bees add to carts over REST                                   |
 | `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
 
 **Without a mix the bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
 
 ## Shoppers who check out
 
-**`--mix` makes each browser worker a stream of shoppers**, one new shopper per journey, each in a fresh browser so every cart starts empty. A shopper only browses (every page in `BEE_PATHS` once), adds the baseline's product to the cart and leaves, or checks out as a guest. Protocol bees always browse.
+**`--mix` makes each browser worker a stream of shoppers**, one new shopper per journey, each in a fresh browser so every cart starts empty. A shopper only browses (every page in `BEE_PATHS` once), adds the baseline's product to the cart and leaves, or checks out as a guest. Protocol bees draw from the same mix, over REST instead of a browser; see [Protocol bees that order](#protocol-bees-that-order).
 
 | Mix               | Browse | Cart and leave | Order | Where the figures come from                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------- | ------ | -------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -103,6 +104,22 @@ MAGENTO_DISPOSABLE=1 drexbot swarm run --env shop --url http://localhost:8080 --
 ```
 
 At two workers a checkout takes about half a minute, so a run shorter than about three minutes may draw no order at all.
+
+### Protocol bees that order
+
+**A protocol bee's k6 user is a stream of shoppers too,** drawn from the same `--mix` with the same figures, held equal to `src/bee/mix.ts` by a test. A shopper who browses asks for every page in `BEE_PATHS` once; one who fills a cart, or checks out, does it over Magento's REST API as a guest, with no browser and no product page, so a protocol bee can hold the mix at a volume a browser bee cannot. Without a mix, or with `browse`, a user asks for one page per iteration exactly as before.
+
+| Step (stage)        | Request                                                  | Notes                                                         |
+| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `cart-create`       | `POST /rest/V1/guest-carts`                              | Answers the new cart's id                                     |
+| `cart`              | `POST /rest/V1/guest-carts/ID/items`                     | One of the SKU, from `--sku` or the baseline's simple product |
+| `shipping-estimate` | `POST /rest/V1/guest-carts/ID/estimate-shipping-methods` | The first method it offers is the one chosen                  |
+| `shipping`          | `POST /rest/V1/guest-carts/ID/shipping-information`      | An invented address in Austin; the chosen method              |
+| `place-order`       | `POST /rest/V1/guest-carts/ID/payment-information`       | `checkmo` only, so no card number is ever sent                |
+
+Each request is its own stage with its own counts and histograms, and `cart`, `shipping` and `place-order` carry the names the browser bee uses, so the record reads both kinds the same way. A step the store refuses stops that journey there and counts it failed; a store that offers no shipping method fails `shipping-estimate`. An order is counted as placed when `place-order` is served, since there is no success page to wait for. Whole journeys are `journey:browse`, `journey:cart` and `journey:order`, timed from the first request to the last.
+
+**The gates are the browser bee's.** The plan refuses a protocol bee that would order unless `MAGENTO_DISPOSABLE=1`, the bee refuses to start unless the plan handed it `BEE_DISPOSABLE=1`, and the plan refuses a mix without a SKU for it to add. The baseline keeps the simple product's SKU from now on; a baseline captured before that needs capturing again, or `--sku`. Because the default run has a protocol bee, `--mix` now orders from it too; `--protocol-bees 0` keeps the orders to the browser bees. With both kinds the record prints a shoppers block for each.
 
 **The record reads the shoppers as ratios:** the mix set beside the mix the run drew, how many journeys of each kind were served, each step's p50 and p95, the step that takes the largest share of the steps' p95 time, and orders per minute per store CPU when `--store-cpus` gives the store's cap. Never shoppers per minute, which says nothing about a store with other caps. A short run draws few journeys, so the mix drawn wanders from the mix set; both are printed so that is visible. An example, with made-up figures:
 
@@ -223,9 +240,10 @@ A bee is any image that reads these variables and writes the `bee/1` lines. Stan
 | `BEE_LIFETIME`       | Hard limit on the bee's life, enforced by its entrypoint           |
 | `BEE_FORWARD`        | Optional `PORT=HOST:PORT` relays                                   |
 | `BEE_WINDOW_SECONDS` | Browser bee: how often it writes a window of counts (default 10)   |
-| `BEE_MIX`            | Browser bee: `browse` (default), `normal-day` or `checkout-stress` |
+| `BEE_MIX`            | Either kind: `browse` (default), `normal-day` or `checkout-stress` |
 | `BEE_CART_PATH`      | Browser bee: the product a cart or order journey buys              |
-| `BEE_DISPOSABLE`     | Browser bee: `1`, and only `1`, lets a mix place orders            |
+| `BEE_CART_SKU`       | Protocol bee: the simple product a cart or order journey adds      |
+| `BEE_DISPOSABLE`     | Either kind: `1`, and only `1`, lets a mix place orders            |
 
 A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
 

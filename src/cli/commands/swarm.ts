@@ -69,9 +69,11 @@ Flags for run and aws:
   --network NAME          with --via docker: start the bees on a Docker network the
                           store is on, so a store on the bee host is reached
                           container to container, with no port opened
-  --mix NAME              what the browser bees' shoppers do: browse, normal-day
-                          or checkout-stress; the last two place orders and need
+  --mix NAME              what the bees' shoppers do: browse, normal-day or
+                          checkout-stress; the last two place orders and need
                           MAGENTO_DISPOSABLE=1                       (default: browse)
+  --sku SKU               the simple product protocol bees add to carts over REST
+                          (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
 `
 
@@ -148,6 +150,7 @@ const planFrom = (
 	const storeCpus =
 		flag(argv, '--store-cpus') === undefined ? undefined : number(argv, '--store-cpus', 0)
 	const cartPath = store.simpleProductPath ?? store.configurableProductPath
+	const cartSku = flag(argv, '--sku') ?? store.simpleProductSku
 	const via = (flag(argv, '--via') ?? 'docker') as Via
 	if (via !== 'docker' && via !== 'ecs') return `--via is docker or ecs, not "${String(via)}"`
 	const host = hostNamed(hostName)
@@ -164,6 +167,7 @@ const planFrom = (
 		...(run === undefined ? {} : { run }),
 		...(beePrefix === undefined ? {} : { beePrefix }),
 		...(cartPath === undefined ? {} : { cartPath }),
+		...(cartSku === undefined ? {} : { cartSku }),
 		disposable: process.env['MAGENTO_DISPOSABLE'] === '1',
 		...(storeCpus === undefined || storeCpus === 0 ? {} : { storeCpus }),
 	})
