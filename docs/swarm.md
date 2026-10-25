@@ -152,7 +152,7 @@ MAGENTO_DISPOSABLE=1 drexbot swarm run --env shop --url http://localhost:8080 --
 ```
 
 - **It places orders, so it has the gates of a mix that does:** `MAGENTO_DISPOSABLE=1`, a SKU from the baseline or `--sku`, and `BEE_DISPOSABLE=1` handed to the bee by the plan.
-- **It runs alone.** It is refused beside `--mix` or `--protocol-users`, with browser bees (`--browser-bees` defaults to 0 with `--orders`), with more than one protocol bee, and when the run is too short to be asked for one order. A rate shared between bees would drift.
+- **It runs alone.** It is refused beside `--mix`, `--protocol-users` or `--of-knee`, with browser bees (`--browser-bees` defaults to 0 with `--orders`), with more than one protocol bee, and unless the run lasts a whole number of DURATIONs, so the orders it asks for are exactly the orders k6 starts. A rate shared between bees would drift.
 - **Users are sized from the rate.** The bee starts the users that stay busy when every order takes a minute (orders a second times 60, at least 1) and may run twice as many. An order that finds none free is not started, and k6 counts it as dropped.
 - **The record counts what happened to the orders:** one line with the orders asked for (N times the run's seconds over DURATION, rounded down), started, placed, failed and dropped. Dropped orders are the ones the store was too slow to be given, so a store that falls behind reads as one that was asked for more than it took, not as one that was asked for less.
 - **Runs at different rates are not compared with each other,** because the rate is part of the run's shape.
