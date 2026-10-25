@@ -109,11 +109,14 @@ const rateUsers = rate => {
 
 const rateScenario = (rate, seconds) => {
 	const users = rateUsers(rate)
+	// k6 starts one order as the run begins and one each interval after, so a window as long as the run also
+	// starts one on its last instant; ending it half an interval early starts exactly the orders asked for.
+	const window = seconds - rate.perSeconds / rate.orders / 2
 	return {
 		executor: 'constant-arrival-rate',
 		rate: rate.orders,
 		timeUnit: `${rate.perSeconds}s`,
-		duration: `${seconds}s`,
+		duration: `${Math.round(window * 1000)}ms`,
 		preAllocatedVUs: users.start,
 		maxVUs: users.most,
 		// An order begun just before the end is let finish rather than counted as the store failing.

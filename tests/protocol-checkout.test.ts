@@ -571,7 +571,8 @@ describe('the k6 bee placing orders at a set rate', () => {
 		assert.equal(scenario['vus'], 2)
 	})
 
-	it('arrives at the rate, in the interval, for the length of the run', () => {
+	it('arrives at the rate, in the interval, ending half an interval early so it starts only the orders asked for', () => {
+		// 25 every 300 s is one every 12 s: starts at 0, 12, ... 588 are 50, and a window to 600 would start a 51st.
 		const { scenario } = runBee(rate, store, [])
 		assert.deepEqual(
 			{ ...scenario },
@@ -579,7 +580,7 @@ describe('the k6 bee placing orders at a set rate', () => {
 				executor: 'constant-arrival-rate',
 				rate: 25,
 				timeUnit: '300s',
-				duration: '600s',
+				duration: '594000ms',
 				preAllocatedVUs: 5,
 				maxVUs: 10,
 				gracefulStop: '60s',
