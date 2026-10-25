@@ -174,6 +174,7 @@ export const conductAcross = async (
 		},
 		caveats,
 		...(first.plan.storeCpus === undefined ? {} : { storeCpus: first.plan.storeCpus }),
+		...(first.plan.cgroupParent === undefined ? {} : { cgroupParent: first.plan.cgroupParent }),
 		...(deployLedger === undefined
 			? {}
 			: { deploys: deployReport(deployLedger, { startedAt, finishedAt }, lines) }),

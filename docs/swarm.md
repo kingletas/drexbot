@@ -58,24 +58,25 @@ The browser image is Playwright's, about 2.5 GB; the protocol image is k6's, und
 drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --protocol-users 200
 ```
 
-| Flag                                   | Default        | Meaning                                                                                   |
-| -------------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
-| `--url`                                | `$MAGENTO_URL` | The store, which must be in `swarm-targets`                                               |
-| `--env`                                | `local`        | Whose store baseline to read                                                              |
-| `--on`                                 | `local`        | Bee hosts from `swarm-hosts`, comma-separated, or this machine                            |
-| `--via`                                | `docker`       | `docker`, or `ecs` for tasks on a local ECS emulator                                      |
-| `--seconds`                            | `60`           | Seconds of load; at least 10                                                              |
-| `--browser-bees`, `--browser-workers`  | `1`, `2`       | How many browser bees, and workers in each                                                |
-| `--browser-cpus`, `--browser-memory`   | `2`, `2g`      | Each browser bee's size                                                                   |
-| `--protocol-bees`, `--protocol-users`  | `1`, `50`      | How many protocol bees, and k6 users in each                                              |
-| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`      | Each protocol bee's size                                                                  |
-| `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)                           |
-| `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on                   |
-| `--mix NAME`                           | `browse`       | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
-| `--orders N --per DURATION`            | none           | Orders at a set rate; see [Orders at a set rate](#orders-at-a-set-rate)                   |
-| `--sku SKU`                            | the baseline's | The simple product protocol bees add to carts over REST                                   |
-| `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
-| `--deploy-ledger FILE`                 | none           | A deploy tool's audit log; see [Deploys](#a-run-that-crosses-a-deploy)                    |
+| Flag                                   | Default                  | Meaning                                                                                         |
+| -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `--url`                                | `$MAGENTO_URL`           | The store, which must be in `swarm-targets`                                                     |
+| `--env`                                | `local`                  | Whose store baseline to read                                                                    |
+| `--on`                                 | `local`                  | Bee hosts from `swarm-hosts`, comma-separated, or this machine                                  |
+| `--via`                                | `docker`                 | `docker`, or `ecs` for tasks on a local ECS emulator                                            |
+| `--seconds`                            | `60`                     | Seconds of load; at least 10                                                                    |
+| `--browser-bees`, `--browser-workers`  | `1`, `2`                 | How many browser bees, and workers in each                                                      |
+| `--browser-cpus`, `--browser-memory`   | `2`, `2g`                | Each browser bee's size                                                                         |
+| `--protocol-bees`, `--protocol-users`  | `1`, `50`                | How many protocol bees, and k6 users in each                                                    |
+| `--protocol-cpus`, `--protocol-memory` | `1`, `1g`                | Each protocol bee's size                                                                        |
+| `--forward PORT=HOST:PORT`             | none                     | A relay inside every bee; see [Where bees run](#where-bees-run)                                 |
+| `--network NAME`                       | none                     | With `--via docker`, start the bees on a Docker network the store is on                         |
+| `--mix NAME`                           | `browse`                 | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out)       |
+| `--orders N --per DURATION`            | none                     | Orders at a set rate; see [Orders at a set rate](#orders-at-a-set-rate)                         |
+| `--sku SKU`                            | the baseline's           | The simple product protocol bees add to carts over REST                                         |
+| `--store-cpus N`                       | none                     | The CPUs the store is capped at, so orders read per store CPU                                   |
+| `--cgroup-parent SLICE`                | `$DREXBOT_CGROUP_PARENT` | The systemd slice every bee is created under, such as `lab.slice`; a slice's name, never a path |
+| `--deploy-ledger FILE`                 | none                     | A deploy tool's audit log; see [Deploys](#a-run-that-crosses-a-deploy)                          |
 
 **Without a mix the bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
 

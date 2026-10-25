@@ -18,10 +18,17 @@ import { beeLinesIn, Windows, type BeeLine } from '../src/bee/lines.js'
 import { readBeeConfig } from '../src/bee/config.js'
 import { awsHandover } from '../src/swarm/aws.js'
 import { conduct, conductAcross, tearDown, type Launcher } from '../src/swarm/conductor.js'
-import type { Container, Docker } from '../src/swarm/docker.js'
+import { runArgs, type Container, type Docker } from '../src/swarm/docker.js'
 import { emulatorRefusal, EcsEmulator } from '../src/swarm/ecs.js'
 import { saturation } from '../src/swarm/measure.js'
-import { planRun, shapeKey, stagesOf, type RunPlan, type Shape } from '../src/swarm/plan.js'
+import {
+	planRun,
+	refuseCgroupParent,
+	shapeKey,
+	stagesOf,
+	type RunPlan,
+	type Shape,
+} from '../src/swarm/plan.js'
 import { reconcile } from '../src/swarm/reconcile.js'
 import { previousFor, renderRecord, RECORD_TAG, type RunRecord } from '../src/swarm/record.js'
 import {
@@ -293,6 +300,58 @@ const finished = (kind: 'browser' | 'protocol', bee: string): BeeLine => ({
 	kind,
 	at: '2026-01-01T00:01:00.000Z',
 	concurrency: 1,
+})
+
+describe('the cgroup bees are created under', () => {
+	const planned = (cgroupParent?: string, via: 'docker' | 'ecs' = 'docker'): RunPlan | string =>
+		planRun({
+			url: 'http://store.example:8080/',
+			stages: [{ stage: 'home', path: '/' }],
+			host,
+			via,
+			shape: shape(),
+			images: { browser: 'b', protocol: 'p' },
+			run: 'run-1',
+			...(cgroupParent === undefined ? {} : { cgroupParent }),
+		})
+
+	it('puts every bee under the slice it was given, and tells Docker so', () => {
+		const run = planned('lab.slice') as RunPlan
+		assert.equal(run.cgroupParent, 'lab.slice')
+		for (const bee of run.bees) {
+			assert.equal(bee.cgroupParent, 'lab.slice')
+			const args = runArgs('run-1', bee)
+			assert.equal(args[args.indexOf('--cgroup-parent') + 1], 'lab.slice')
+		}
+	})
+
+	it("leaves a bee in Docker's own cgroup when none was given", () => {
+		const run = planned() as RunPlan
+		assert.equal(run.cgroupParent, undefined)
+		for (const bee of run.bees)
+			assert.equal(runArgs('run-1', bee).includes('--cgroup-parent'), false)
+	})
+
+	it("refuses anything but a slice's name before a bee starts, saying the form it takes", () => {
+		for (const name of [
+			'',
+			'/lab.slice',
+			'../x.slice',
+			'lab',
+			'lab.slice/x',
+			'-lab.slice',
+			'lab..slice',
+		])
+			assert.match(
+				refusalOf(planned(name)),
+				/--cgroup-parent takes a slice's name, such as lab\.slice/,
+			)
+		assert.equal(refuseCgroupParent('machine-lab.slice', 'docker'), undefined)
+	})
+
+	it('refuses it for an emulator, whose tasks have no cgroup of ours', () => {
+		assert.match(refusalOf(planned('lab.slice', 'ecs')), /leave it out with --via ecs/)
+	})
 })
 
 describe('reconciling two kinds of bee into one result', () => {

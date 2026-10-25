@@ -18,6 +18,31 @@ export interface Container {
 	readonly labels: Readonly<Record<string, string>>
 }
 
+/** `docker run` for one bee: its caps, its labels, its cgroup when it has one, and its orders. */
+export const runArgs = (run: string, bee: BeeOrder, network?: string): string[] => [
+	'run',
+	'--detach',
+	'--name',
+	`drexbot-${run}-${bee.id}`,
+	'--label',
+	`${RUN_LABEL}=${run}`,
+	'--label',
+	`${BEE_LABEL}=${bee.id}`,
+	'--cpus',
+	String(bee.cpus),
+	'--memory',
+	String(bee.memory),
+	'--memory-swap',
+	String(bee.memory),
+	'--pids-limit',
+	'2048',
+	...(bee.cgroupParent === undefined ? [] : ['--cgroup-parent', bee.cgroupParent]),
+	...(bee.kind === 'browser' ? ['--shm-size', '512m'] : []),
+	...(network === undefined ? [] : ['--network', network]),
+	...Object.entries(bee.env).flatMap(([key, value]) => ['--env', `${key}=${value}`]),
+	bee.image,
+]
+
 export class Docker {
 	constructor(readonly host: BeeHost) {}
 
@@ -54,30 +79,7 @@ export class Docker {
 
 	/** Starts one bee with its caps set at creation, so it never runs a moment uncapped. */
 	async start(run: string, bee: BeeOrder, network?: string): Promise<string> {
-		const env = Object.entries(bee.env).flatMap(([key, value]) => ['--env', `${key}=${value}`])
-		const out = await this.docker([
-			'run',
-			'--detach',
-			'--name',
-			`drexbot-${run}-${bee.id}`,
-			'--label',
-			`${RUN_LABEL}=${run}`,
-			'--label',
-			`${BEE_LABEL}=${bee.id}`,
-			'--cpus',
-			String(bee.cpus),
-			'--memory',
-			String(bee.memory),
-			'--memory-swap',
-			String(bee.memory),
-			'--pids-limit',
-			'2048',
-			...(bee.kind === 'browser' ? ['--shm-size', '512m'] : []),
-			...(network === undefined ? [] : ['--network', network]),
-			...env,
-			bee.image,
-		])
-		return out.trim()
+		return (await this.docker(runArgs(run, bee, network))).trim()
 	}
 
 	/** Caps a container something else started, as ECS would have from its task definition. */
