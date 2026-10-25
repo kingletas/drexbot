@@ -96,6 +96,19 @@ const membersOf = async (docker: Docker, project: string): Promise<Member[]> => 
 		})
 }
 
+/**
+ * Why a step test cannot read this store as ratios, or undefined when it can:
+ * without a CPU cap on any service there is nothing to set the knee against.
+ */
+export const capsRefusal = async (docker: Docker, project: string): Promise<string | undefined> => {
+	const members = await membersOf(docker, project)
+	if (members.some(member => member.capCpus !== undefined)) return undefined
+	return (
+		`no service of the Compose project ${project} has a CPU cap, so its knee could only be a count of users, ` +
+		'which means nothing for any other store; give its services a cpus: limit in a Compose file and run again'
+	)
+}
+
 /** Samples the project's services until stopped; a sample that fails is skipped, not guessed. */
 export const sampleStore = async (
 	docker: Docker,

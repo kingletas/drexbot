@@ -44,7 +44,7 @@ import {
 	type StepOutcome,
 	type StepTaken,
 } from '../../swarm/step.js'
-import { againstCaps, machineLoad, sampleStore } from '../../swarm/store-load.js'
+import { againstCaps, capsRefusal, machineLoad, sampleStore } from '../../swarm/store-load.js'
 
 /**
  * `drexbot swarm`: load from bees in containers, blended from browsers and
@@ -345,6 +345,17 @@ const stepTest = async (
 	// The knee is read at the normal day's mix unless the operator asks for another.
 	if (flag(base, '--mix') === undefined) base.push('--mix', 'normal-day')
 	const storeDocker = new Docker(localHost())
+	// The knee is read as ratios against the store's caps, so a store without any is refused before a step runs.
+	let uncapped: string | undefined
+	try {
+		uncapped = await capsRefusal(storeDocker, project)
+	} catch (cause) {
+		uncapped = cause instanceof Error ? cause.message : String(cause)
+	}
+	if (uncapped !== undefined) {
+		process.stderr.write(`drexbot swarm: ${uncapped}\n`)
+		return 2
+	}
 	const steps: StepTaken[] = []
 	let done = ''
 	const stop = { requested: false }

@@ -240,10 +240,15 @@ export const renderStepTest = (
 		)
 	}
 	const busy = steps.filter(step => step.machineLoad >= MACHINE_BUSY)
-	out.push(
-		busy.length === 0
-			? `  the machine stayed under ${pct(MACHINE_BUSY)} load at every step, so the knee is the store's`
-			: `  the machine passed ${pct(MACHINE_BUSY)} load at ${busy.map(step => step.users).join(', ')} users: those steps may measure the machine, not the store`,
-	)
+	if (caps.length === 0)
+		out.push(
+			'  no service had a CPU cap, so this is a count of users for this store alone, not a ratio any other store can use',
+		)
+	else
+		out.push(
+			busy.length === 0
+				? `  the machine stayed under ${pct(MACHINE_BUSY)} load at every step, so the knee is the store's`
+				: `  the machine passed ${pct(MACHINE_BUSY)} load at ${busy.map(step => step.users).join(', ')} users: those steps may measure the machine, not the store`,
+		)
 	return `${out.join('\n')}\n`
 }

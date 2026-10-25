@@ -196,3 +196,32 @@ describe('the step test as a person reads it', () => {
 		assert.match(text, /the machine passed 75% load at 20 users/)
 	})
 })
+
+describe('a store without caps', () => {
+	it("is never read as the store's knee", () => {
+		const step = (users: number, verdict: 'good' | 'knee'): StepTaken => ({
+			...outcome(users, 400),
+			verdict,
+			reason: '',
+			run: `run-${users}`,
+			seconds: 120,
+			ordersPlaced: users,
+			capped: [],
+			machineLoad: 0.1,
+		})
+		const text = renderStepTest(
+			[step(5, 'good'), step(6, 'knee')],
+			'the knee is between 5 and 6 users',
+			{
+				target: 'http://shop.example',
+				mix: 'normal-day',
+			},
+		)
+		assert.doesNotMatch(text, /the knee is the store's/)
+		assert.doesNotMatch(text, /per store CPU/)
+		assert.match(
+			text,
+			/no service had a CPU cap, so this is a count of users for this store alone, not a ratio/,
+		)
+	})
+})
