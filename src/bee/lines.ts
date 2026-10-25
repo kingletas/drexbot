@@ -19,8 +19,20 @@ export const JOURNEY_PREFIX = 'journey:'
 
 export const isJourneyStage = (stage: string): boolean => stage.startsWith(JOURNEY_PREFIX)
 
-/** The checkout steps a journey times, in the order a shopper reaches them. */
-export const CHECKOUT_STAGES = ['cart', 'checkout', 'shipping', 'place-order', 'confirmation']
+/**
+ * The checkout steps a journey times, in the order a shopper reaches them. The
+ * browser bee times `checkout` and `confirmation`, which are pages; the protocol
+ * bee times `cart-create` and `shipping-estimate`, which are requests of their own.
+ */
+export const CHECKOUT_STAGES = [
+	'cart-create',
+	'cart',
+	'checkout',
+	'shipping-estimate',
+	'shipping',
+	'place-order',
+	'confirmation',
+]
 
 /** Counts for one stage over one window; windows add, so a killed bee loses only its last one. */
 export interface StageWindow {

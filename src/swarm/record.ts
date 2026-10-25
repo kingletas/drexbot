@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CHECKOUT_STAGES, JOURNEY_PREFIX, isJourneyStage } from '../bee/lines.js'
+import { CHECKOUT_STAGES, JOURNEY_PREFIX, isJourneyStage, type BeeKind } from '../bee/lines.js'
 import { MIXES, type Journey } from '../bee/mix.js'
 import type { KindResult, Percentiles, RunResult } from './reconcile.js'
 import type { Shape, Via } from './plan.js'
@@ -101,38 +101,52 @@ const JOURNEY_NAMES: Readonly<Record<Journey, string>> = {
 const percent = (part: number, whole: number): string =>
 	whole === 0 ? '-' : `${((part / whole) * 100).toFixed(2)}%`
 
+/** The step that, served, means an order exists: a browser sees the success page, a protocol bee the order's id. */
+const ORDER_PLACED_BY: Readonly<Record<BeeKind, string>> = {
+	browser: 'confirmation',
+	protocol: 'place-order',
+}
+
 /**
  * The shoppers as ratios: the mix asked for beside the mix the run actually
  * drew, each checkout step's time, the step that gives first, and orders per
  * store CPU when the store's cap is known. Never shoppers per minute, which
  * says nothing about a store with other caps.
  */
-const checkoutLines = (record: RunRecord, browser: KindResult): string[] => {
+const checkoutLines = (
+	record: RunRecord,
+	kind: BeeKind,
+	result: KindResult,
+	named: boolean,
+): string[] => {
 	const name = record.shape.mix
 	if (name === undefined || name === 'browse') return []
 	const set = MIXES[name]
 	const journeys = (['browse', 'cart', 'order'] as const).map(journey => ({
 		journey,
-		taken: browser.stages[`${JOURNEY_PREFIX}${journey}`]?.count ?? 0,
-		failed: browser.stages[`${JOURNEY_PREFIX}${journey}`]?.failures ?? 0,
+		taken: result.stages[`${JOURNEY_PREFIX}${journey}`]?.count ?? 0,
+		failed: result.stages[`${JOURNEY_PREFIX}${journey}`]?.failures ?? 0,
 	}))
 	const total = journeys.reduce((sum, j) => sum + j.taken, 0)
+	// A protocol bee from a run before protocol bees took the mix wrote no journeys at all.
+	if (kind === 'protocol' && total === 0) return []
 	const out = [
 		'',
-		`  shoppers, mix ${name}: ${total} journeys`,
+		`  shoppers${named ? ` from ${kind} bees` : ''}, mix ${name}: ${total} journeys`,
 		`    set     ${journeys.map(j => `${JOURNEY_NAMES[j.journey]} ${percent(set[j.journey], 1)}`).join('   ')}`,
 		`    drawn   ${journeys.map(j => `${JOURNEY_NAMES[j.journey]} ${percent(j.taken, total)}`).join('   ')}`,
 		`    served  ${journeys.map(j => `${JOURNEY_NAMES[j.journey]} ${j.taken - j.failed} of ${j.taken}`).join('   ')}`,
 	]
 	const steps = CHECKOUT_STAGES.flatMap(stage => {
-		const result = browser.stages[stage]
-		return result === undefined ? [] : [{ stage, result }]
+		const stepped = result.stages[stage]
+		return stepped === undefined ? [] : [{ stage, result: stepped }]
 	})
 	if (steps.length === 0) return out
 	out.push('  checkout steps, the whole step as the shopper waited for it:')
+	const width = Math.max(14, ...steps.map(step => step.stage.length))
 	for (const { stage, result } of steps) {
 		out.push(
-			`    ${stage.padEnd(14)} p50 ${ms(result.total.p50)}   p95 ${ms(result.total.p95)}   ` +
+			`    ${stage.padEnd(width)} p50 ${ms(result.total.p50)}   p95 ${ms(result.total.p95)}   ` +
 				`${result.failures} of ${result.count} failed`,
 		)
 	}
@@ -143,8 +157,8 @@ const checkoutLines = (record: RunRecord, browser: KindResult): string[] => {
 	out.push(
 		`  gives first: ${slowest.stage}, ${percent(slowest.result.total.p95 ?? 0, whole)} of the steps' p95 time`,
 	)
-	const placed =
-		(browser.stages['confirmation']?.count ?? 0) - (browser.stages['confirmation']?.failures ?? 0)
+	const last = result.stages[ORDER_PLACED_BY[kind]]
+	const placed = (last?.count ?? 0) - (last?.failures ?? 0)
 	const minutes = record.shape.seconds / 60
 	out.push(
 		record.storeCpus === undefined
@@ -166,6 +180,9 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 			: `  compared with ${previous.run}`,
 		'',
 	]
+	const drewJourneys = (result: KindResult | undefined): boolean =>
+		Object.keys(result?.stages ?? {}).some(isJourneyStage)
+	const bothKinds = drewJourneys(record.result.browser) && drewJourneys(record.result.protocol)
 	for (const kind of ['browser', 'protocol'] as const) {
 		const now = record.result[kind]
 		if (now === undefined) continue
@@ -183,7 +200,7 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 				out.push(line(`${stage} load`, result.total, before?.stages[stage]?.total))
 			}
 		}
-		if (kind === 'browser') out.push(...checkoutLines(record, now))
+		out.push(...checkoutLines(record, kind, now, bothKinds))
 	}
 	const combined = record.result.combined
 	out.push(

@@ -115,7 +115,7 @@ describe('who may place an order', () => {
 		)
 		assert.match(
 			refusalOf(planned('normal-day', { cartPath: '/bag.html', disposable: true, browserBees: 0 })),
-			/walked by browser bees, and this run has none/,
+			/protocol bees.*SKU/,
 		)
 	})
 
