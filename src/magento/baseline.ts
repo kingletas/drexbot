@@ -25,6 +25,8 @@ export interface StoreBaseline {
 	/** A product with options, or absent when the catalogue has none. */
 	readonly configurableProductPath?: string
 	readonly simpleProductPath?: string
+	/** The simple product's SKU, which a REST cart adds by; absent from a baseline captured before it was kept. */
+	readonly simpleProductSku?: string
 }
 
 interface GraphQlError {
@@ -104,11 +106,11 @@ export const discoverStore = async (http: HttpSurface, baseUrl: string): Promise
 	const listing = await query<{
 		products: {
 			total_count: number
-			items: readonly { url_key: string; name: string; __typename: string }[]
+			items: readonly { url_key: string; name: string; sku: string; __typename: string }[]
 		}
 	}>(
 		http,
-		`{products(filter:{category_uid:{eq:"${category.uid}"}},pageSize:20){total_count items{url_key name __typename}}}`,
+		`{products(filter:{category_uid:{eq:"${category.uid}"}},pageSize:20){total_count items{url_key name sku __typename}}}`,
 	)
 
 	const configurable = listing.products.items.find(
@@ -150,7 +152,9 @@ export const discoverStore = async (http: HttpSurface, baseUrl: string): Promise
 		...(configurable === undefined
 			? {}
 			: { configurableProductPath: productPath(configurable.url_key) }),
-		...(simple === undefined ? {} : { simpleProductPath: productPath(simple.url_key) }),
+		...(simple === undefined
+			? {}
+			: { simpleProductPath: productPath(simple.url_key), simpleProductSku: simple.sku }),
 	}
 }
 

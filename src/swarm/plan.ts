@@ -29,7 +29,7 @@ export interface Shape {
 		readonly memory: number
 	}
 	readonly seconds: number
-	/** Which journeys the browser bees' shoppers take; unset, they browse as they always have. */
+	/** Which journeys the bees' shoppers take; unset, they browse as they always have. */
 	readonly mix?: MixName
 }
 
@@ -103,8 +103,10 @@ export interface PlanInput {
 	readonly run?: string
 	/** Put before every bee's id when one run spans several hosts, so no two bees share one. */
 	readonly beePrefix?: string
-	/** The product a cart or order journey buys. */
+	/** The product page a browser bee's cart or order journey buys. */
 	readonly cartPath?: string
+	/** The simple product a protocol bee's cart or order journey adds over REST. */
+	readonly cartSku?: string
 	/** The store said it may take orders: `MAGENTO_DISPOSABLE=1`, read by the caller. */
 	readonly disposable?: boolean
 	/** The CPUs the store itself is capped at, when the operator knows them, so orders can be read per core. */
@@ -117,11 +119,15 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	if (shape.browser.bees + shape.protocol.bees === 0) return 'a run needs at least one bee'
 	if (shape.seconds < 10) return 'a run needs at least 10 seconds of load to say anything'
 	const mix = MIXES[shape.mix ?? 'browse']
-	if (mix.browse < 1 && shape.browser.bees === 0) {
-		return `the ${shape.mix ?? ''} mix is walked by browser bees, and this run has none`
-	}
-	if (mix.browse < 1 && input.cartPath === undefined) {
+	if (mix.browse < 1 && shape.browser.bees > 0 && input.cartPath === undefined) {
 		return `the ${shape.mix ?? ''} mix puts products in carts, and the store baseline names no product to buy`
+	}
+	if (mix.browse < 1 && shape.protocol.bees > 0 && input.cartSku === undefined) {
+		return (
+			`the ${shape.mix ?? ''} mix has protocol bees add a product to a cart over REST by SKU, ` +
+			'and the store baseline holds none; give the SKU of a simple product in stock with --sku ' +
+			"(a baseline captured again finds one only when the first category's first page lists one)"
+		)
 	}
 	if (mix.order > 0 && input.disposable !== true) {
 		return (
@@ -166,7 +172,14 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 			concurrency,
 			cpus: size.cpus,
 			memory: size.memory,
-			env: { ...common, BEE_ID: id, BEE_CONCURRENCY: String(concurrency) },
+			env: {
+				...common,
+				BEE_ID: id,
+				BEE_CONCURRENCY: String(concurrency),
+				...(kind === 'protocol' && input.cartSku !== undefined && mix.browse < 1
+					? { BEE_CART_SKU: input.cartSku }
+					: {}),
+			},
 		}
 	}
 

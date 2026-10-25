@@ -67,10 +67,16 @@ const startCatalogue = async (
 							{
 								url_key: 'breathe-easy-tank',
 								name: 'Breathe Easy Tank',
+								sku: 'TEST-TANK',
 								__typename:
 									options.configurable === false ? 'SimpleProduct' : 'ConfigurableProduct',
 							},
-							{ url_key: 'joust-bag', name: 'Joust Duffle Bag', __typename: 'SimpleProduct' },
+							{
+								url_key: 'joust-bag',
+								name: 'Joust Duffle Bag',
+								sku: 'TEST-BAG',
+								__typename: 'SimpleProduct',
+							},
 						],
 					},
 				})
@@ -133,6 +139,13 @@ describe('discovering what a store is', () => {
 			() => discover({ searchable: false }),
 			/no word .* returns any search results/,
 		)
+	})
+
+	it("keeps the simple product's SKU, which a REST cart adds by", async () => {
+		const store = await discover()
+
+		assert.equal(store.simpleProductPath, '/joust-bag.html')
+		assert.equal(store.simpleProductSku, 'TEST-BAG')
 	})
 
 	it('says so when the catalogue has no product with options', async () => {

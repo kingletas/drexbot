@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Harness, Options } from 'harness-kernel'
 import { catalogueFor, loadStore } from '../../magento/baseline.js'
-import { beeLinesIn } from '../../bee/lines.js'
+import { beeLinesIn, CHECKOUT_STAGES } from '../../bee/lines.js'
 import { awsHandover } from '../../swarm/aws.js'
 import {
 	conductAcross,
@@ -11,6 +11,7 @@ import {
 	type HostRun,
 	type Launcher,
 } from '../../swarm/conductor.js'
+import { deployReport, readLedger } from '../../swarm/deploys.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
@@ -34,7 +35,16 @@ import {
 	RECORD_TAG,
 	type RunRecord,
 } from '../../swarm/record.js'
-import { allowedTargets, bytesOf, hostNamed, refusalFor } from '../../swarm/settings.js'
+import { allowedTargets, bytesOf, hostNamed, localHost, refusalFor } from '../../swarm/settings.js'
+import {
+	judge,
+	MACHINE_BUSY,
+	nextStep,
+	renderStepTest,
+	type StepOutcome,
+	type StepTaken,
+} from '../../swarm/step.js'
+import { againstCaps, capsRefusal, machineLoad, sampleStore } from '../../swarm/store-load.js'
 
 /**
  * `drexbot swarm`: load from bees in containers, blended from browsers and
@@ -46,11 +56,13 @@ export const SWARM_USAGE = `usage: drexbot swarm COMMAND [flags]
 
   run       start bees against a store, wait, tear down, and record the run
   aws       print the same run as AWS commands for a person to run; runs nothing
-  reconcile DIR   turn the bee lines downloaded after an AWS run into a record
+  reconcile DIR [--deploy-ledger FILE]
+            turn the bee lines downloaded after an AWS run into a record
   images    build both bee images on a bee host
   sweep     remove every bee container on a bee host, from any run
   records   list recorded runs
   measure   how much load one bee of a given size can drive
+  step      raise protocol users step by step until the store reaches its knee
 
 Flags for run and aws:
   --url URL               the store; must be in swarm-targets        (default: $MAGENTO_URL)
@@ -69,15 +81,38 @@ Flags for run and aws:
   --network NAME          with --via docker: start the bees on a Docker network the
                           store is on, so a store on the bee host is reached
                           container to container, with no port opened
-  --mix NAME              what the browser bees' shoppers do: browse, normal-day
-                          or checkout-stress; the last two place orders and need
+  --mix NAME              what the bees' shoppers do: browse, normal-day or
+                          checkout-stress; the last two place orders and need
                           MAGENTO_DISPOSABLE=1                       (default: browse)
+  --sku SKU               the simple product protocol bees add to carts over REST
+                          (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
+  --deploy-ledger FILE    run and reconcile only: a deploy tool's audit log (JSONL);
+                          the deploys that fall within the run are recorded, with
+                          their maintenance window
+
+Flags for step, beside those for run (it sets the bee counts itself):
+  --store-project NAME    the store's Compose project on this machine, whose
+                          services are sampled against their CPU caps (required)
+  --start N               users in the first step                    (default: 10)
+  --most N                the test gives up without a knee past this (default: 640)
+  --resolution F          the knee's bracket is narrow enough at this share
+                          of the last good step                      (default: 0.1)
+  --users-per-bee N       protocol users one bee drives at most      (default: 100)
+  --fpm-workers N         PHP-FPM's max_children, so orders read per worker
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
 	const index = argv.indexOf(name)
 	return index === -1 ? undefined : argv[index + 1]
+}
+
+/** The deploy ledger a run was told to read, or undefined when it was told none. */
+const ledgerFlag = (argv: readonly string[]): string | undefined => {
+	if (!argv.includes('--deploy-ledger')) return undefined
+	const file = flag(argv, '--deploy-ledger')
+	if (file === undefined || file.startsWith('--')) throw new Error('--deploy-ledger needs a file')
+	return file
 }
 
 const number = (argv: readonly string[], name: string, fallback: number): number => {
@@ -148,6 +183,7 @@ const planFrom = (
 	const storeCpus =
 		flag(argv, '--store-cpus') === undefined ? undefined : number(argv, '--store-cpus', 0)
 	const cartPath = store.simpleProductPath ?? store.configurableProductPath
+	const cartSku = flag(argv, '--sku') ?? store.simpleProductSku
 	const via = (flag(argv, '--via') ?? 'docker') as Via
 	if (via !== 'docker' && via !== 'ecs') return `--via is docker or ecs, not "${String(via)}"`
 	const host = hostNamed(hostName)
@@ -164,6 +200,7 @@ const planFrom = (
 		...(run === undefined ? {} : { run }),
 		...(beePrefix === undefined ? {} : { beePrefix }),
 		...(cartPath === undefined ? {} : { cartPath }),
+		...(cartSku === undefined ? {} : { cartSku }),
 		disposable: process.env['MAGENTO_DISPOSABLE'] === '1',
 		...(storeCpus === undefined || storeCpus === 0 ? {} : { storeCpus }),
 	})
@@ -178,6 +215,17 @@ const run = async (
 	if (flag(argv, '--via') === 'ecs' && hosts.length > 1) {
 		process.stderr.write(
 			'drexbot swarm: --via ecs runs on one host, the one its emulator starts containers on\n',
+		)
+		return 2
+	}
+	// Refuse a ledger that is unreadable or malformed now, rather than after the load has run.
+	let ledger: string | undefined
+	try {
+		ledger = ledgerFlag(argv)
+		if (ledger !== undefined) readLedger(ledger)
+	} catch (cause) {
+		process.stderr.write(
+			`drexbot swarm: ${cause instanceof Error ? cause.message : String(cause)}\n`,
 		)
 		return 2
 	}
@@ -223,15 +271,182 @@ const run = async (
 	const bees = runs.reduce((sum, part) => sum + part.plan.bees.length, 0)
 	say(`run ${id}: ${bees} bee(s) on ${hosts.join(' and ')}, against ${runs[0]?.plan.url ?? ''}`)
 	try {
-		const record = await conductAcross(runs, say, stop)
+		const record = await conductAcross(runs, say, stop, ledger)
 		const records = readRecords(harness.workspace.results)
 		const path = writeRecord(harness.workspace.results, record)
 		process.stdout.write(renderRecord(record, previousFor(record, records)))
 		process.stdout.write(`  recorded in ${path.replace(harness.workspace.root, '.')}\n\n`)
-		return record.teardown.verified && record.result.combined.count > 0 ? 0 : 1
+		return record.teardown.verified &&
+			record.result.combined.count > 0 &&
+			record.deploys?.refused === undefined
+			? 0
+			: 1
 	} finally {
 		process.off('SIGINT', onSignal)
 	}
+}
+
+/** The slowest checkout step's p95, from whichever kinds of bee walked the checkout. */
+const checkoutP95Of = (record: RunRecord): number | undefined => {
+	const p95s = (['browser', 'protocol'] as const).flatMap(kind =>
+		CHECKOUT_STAGES.flatMap(stage => {
+			const p95 = record.result[kind]?.stages[stage]?.total.p95
+			return p95 === undefined ? [] : [p95]
+		}),
+	)
+	return p95s.length === 0 ? undefined : Math.max(...p95s)
+}
+
+/** Orders that exist: a browser saw the success page, a protocol bee had its order placed. */
+const ordersOf = (record: RunRecord): number => {
+	const served = (kind: 'browser' | 'protocol', stage: string): number => {
+		const result = record.result[kind]?.stages[stage]
+		return (result?.count ?? 0) - (result?.failures ?? 0)
+	}
+	return served('browser', 'confirmation') + served('protocol', 'place-order')
+}
+
+const withoutFlags = (argv: readonly string[], names: readonly string[]): string[] => {
+	const out: string[] = []
+	for (let i = 0; i < argv.length; i++) {
+		if (names.includes(argv[i] ?? '')) i++
+		else out.push(argv[i] ?? '')
+	}
+	return out
+}
+
+/**
+ * The step test: one run per step, each with protocol bees only, the store's
+ * services sampled against their caps while it runs. It stops at the knee, at a
+ * break, or when a bad step came while the machine itself was busy, because
+ * then the knee may be the machine's.
+ */
+const stepTest = async (
+	harness: Harness,
+	options: Options,
+	argv: readonly string[],
+): Promise<number> => {
+	const project = flag(argv, '--store-project')
+	if (project === undefined) {
+		process.stderr.write(
+			"drexbot swarm: step needs --store-project, the store's Compose project on this machine\n",
+		)
+		return 2
+	}
+	const plan = {
+		start: number(argv, '--start', 10),
+		most: number(argv, '--most', 640),
+		resolution: number(argv, '--resolution', 0.1),
+	}
+	const perBee = Math.max(1, number(argv, '--users-per-bee', 100))
+	const workers =
+		flag(argv, '--fpm-workers') === undefined ? undefined : number(argv, '--fpm-workers', 0)
+	const base = withoutFlags(argv, ['--browser-bees', '--protocol-bees', '--protocol-users', '--on'])
+	// The knee is read at the normal day's mix unless the operator asks for another.
+	if (flag(base, '--mix') === undefined) base.push('--mix', 'normal-day')
+	const storeDocker = new Docker(localHost())
+	// The knee is read as ratios against the store's caps, so a store without any is refused before a step runs.
+	let uncapped: string | undefined
+	try {
+		uncapped = await capsRefusal(storeDocker, project)
+	} catch (cause) {
+		uncapped = cause instanceof Error ? cause.message : String(cause)
+	}
+	if (uncapped !== undefined) {
+		process.stderr.write(`drexbot swarm: ${uncapped}\n`)
+		return 2
+	}
+	const steps: StepTaken[] = []
+	let done = ''
+	const stop = { requested: false }
+	const onSignal = (): void => {
+		if (stop.requested) process.exit(130)
+		stop.requested = true
+		say('stopping: this step tears down and no other starts')
+	}
+	process.on('SIGINT', onSignal)
+	try {
+		for (;;) {
+			const next = nextStep(steps, plan)
+			if ('done' in next) {
+				done = next.done
+				break
+			}
+			if (stop.requested) {
+				done = 'stopped by hand'
+				break
+			}
+			const bees = Math.ceil(next.users / perBee)
+			const each = Math.ceil(next.users / bees)
+			const users = bees * each
+			const stepArgv = [
+				...base,
+				'--browser-bees',
+				'0',
+				'--protocol-bees',
+				String(bees),
+				'--protocol-users',
+				String(each),
+			]
+			const runPlan = planFrom(harness, options, stepArgv, 'local', runId())
+			if (typeof runPlan === 'string') {
+				process.stderr.write(`drexbot swarm: ${runPlan}\n`)
+				return 2
+			}
+			const docker = new Docker(runPlan.host)
+			for (const image of new Set(runPlan.bees.map(bee => bee.image))) {
+				if (!(await docker.hasImage(image))) {
+					process.stderr.write(
+						`drexbot swarm: local has no ${image}; build it with: drexbot swarm images --on local\n`,
+					)
+					return 2
+				}
+			}
+			const launcher = dockerLauncher(docker, flag(argv, '--network') ?? runPlan.host.network)
+			say(`step ${steps.length + 1}: ${users} users on ${bees} protocol bee(s)`)
+			const sampler = await sampleStore(storeDocker, project)
+			const record = await conductAcross([{ plan: runPlan, docker, launcher }], say, stop)
+			const load = await sampler.stop()
+			writeRecord(harness.workspace.results, record)
+			const outcome: StepOutcome = {
+				users,
+				checkoutP95: checkoutP95Of(record),
+				p95: record.result.combined.ttfb.p95,
+				requests: record.result.combined.count,
+				failures: record.result.combined.failures,
+				perSecond: Math.round((record.result.combined.count / record.shape.seconds) * 10) / 10,
+			}
+			const judged = judge(steps, outcome)
+			const taken: StepTaken = {
+				...judged,
+				run: record.run,
+				seconds: record.shape.seconds,
+				ordersPlaced: ordersOf(record),
+				capped: againstCaps(load),
+				machineLoad: machineLoad(load),
+			}
+			steps.push(taken)
+			say(`  ${taken.verdict}: ${taken.reason}`)
+			if (!record.teardown.verified) {
+				done = `stopped: step ${steps.length}'s teardown was not verified, so no other step starts`
+				break
+			}
+			if (taken.verdict !== 'good' && taken.machineLoad >= MACHINE_BUSY) {
+				done = `stopped at ${users} users: the step went bad while the machine was at ${Math.round(taken.machineLoad * 100)}% load, so it may be the machine's knee, not the store's`
+				break
+			}
+		}
+	} finally {
+		process.off('SIGINT', onSignal)
+	}
+	process.stdout.write(
+		renderStepTest(steps, done, {
+			target: steps.length === 0 ? '' : (options.url ?? process.env['MAGENTO_URL'] ?? ''),
+			mix: flag(base, '--mix') ?? 'normal-day',
+			...(workers === undefined || workers === 0 ? {} : { workers }),
+		}),
+	)
+	return steps.length > 0 ? 0 : 1
 }
 
 const sweep = async (argv: readonly string[]): Promise<number> => {
@@ -286,18 +501,24 @@ const aws = (harness: Harness, options: Options, argv: readonly string[]): numbe
 }
 
 /** A record from an AWS run: the bees' lines as downloaded, with teardown left to the person who ran it. */
-const reconcileDirectory = (harness: Harness, directory: string | undefined): number => {
+const reconcileDirectory = (harness: Harness, argv: readonly string[]): number => {
+	const directory = argv[0]
 	if (directory === undefined || !existsSync(join(directory, 'plan.json'))) {
-		process.stderr.write('usage: drexbot swarm reconcile DIR   (the directory `swarm aws` wrote)\n')
+		process.stderr.write(
+			'usage: drexbot swarm reconcile DIR [--deploy-ledger FILE]   (DIR is the directory `swarm aws` wrote)\n',
+		)
 		return 2
 	}
 	const plan = JSON.parse(readFileSync(join(directory, 'plan.json'), 'utf8')) as RunPlan
 	const lines = beeLinesIn(readFileSync(join(directory, 'bee-lines.txt'), 'utf8'))
+	const ledger = ledgerFlag(argv)
+	const startedAt = lines[0]?.at ?? new Date().toISOString()
+	const finishedAt = lines.at(-1)?.at ?? new Date().toISOString()
 	const record: RunRecord = {
 		drexbot: RECORD_TAG,
 		run: plan.run,
-		startedAt: lines[0]?.at ?? new Date().toISOString(),
-		finishedAt: lines.at(-1)?.at ?? new Date().toISOString(),
+		startedAt,
+		finishedAt,
 		target: plan.url,
 		host: 'aws',
 		via: 'ecs' as const,
@@ -308,11 +529,14 @@ const reconcileDirectory = (harness: Harness, directory: string | undefined): nu
 		caveats: [
 			'teardown on AWS is checked by the person who ran the commands, with the list-tasks block',
 		],
+		...(ledger === undefined
+			? {}
+			: { deploys: deployReport(ledger, { startedAt, finishedAt }, lines) }),
 	}
 	const records = readRecords(harness.workspace.results)
 	writeRecord(harness.workspace.results, record)
 	process.stdout.write(renderRecord(record, previousFor(record, records)))
-	return 0
+	return record.deploys?.refused === undefined ? 0 : 1
 }
 
 const listRecords = (harness: Harness): number => {
@@ -339,7 +563,7 @@ export const swarmCommand = async (
 			case 'aws':
 				return aws(harness, options, rest)
 			case 'reconcile':
-				return reconcileDirectory(harness, rest[0])
+				return reconcileDirectory(harness, rest)
 			case 'images':
 				return await buildImages(harness, rest)
 			case 'sweep':
@@ -348,6 +572,8 @@ export const swarmCommand = async (
 				return listRecords(harness)
 			case 'measure':
 				return await measure(harness, rest, images(harness), say)
+			case 'step':
+				return await stepTest(harness, options, rest)
 			default:
 				process.stderr.write(SWARM_USAGE)
 				return 2
