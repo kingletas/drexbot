@@ -17,6 +17,7 @@ Every run is recorded, compared with the last run of the same shape, and ends wi
 - [A run](#a-run)
 - [Reading the record](#reading-the-record)
 - [A run that crosses a deploy](#a-run-that-crosses-a-deploy)
+- [Finding the store's knee](#finding-the-stores-knee)
 - [Where bees run](#where-bees-run)
 - [Stopping, and what happens when something dies](#stopping-and-what-happens-when-something-dies)
 - [How big a bee should be](#how-big-a-bee-should-be)
@@ -196,6 +197,43 @@ The deploys are printed under the store's line in the record. An example, with m
 ```
 
 **The split uses the browser bees only.** A browser bee writes a window every 10 seconds (`BEE_WINDOW_SECONDS`), each with the time it was written. A window that ended before the deploy began is _before_, one that began after it ended is _after_, and any window that overlaps it is _during_, so the edges are as coarse as the window. The split is made twice when the deploy took a maintenance window: around the whole deploy, most of which the store serves normally, and around the window alone, which is where a store answers 503. The sides are different lengths, so read failures as a share and p95 as a time rather than comparing counts. **A protocol bee writes one window for the whole run** (k6 reports only at its end), so its requests cannot be placed before or after anything, and the record says so rather than guessing. A split for protocol bees needs interval windows from the protocol bee first.
+
+## Finding the store's knee
+
+**`drexbot swarm step` raises the load one run at a time until the store reaches its knee, and stops there, never at the break.** Each step is a whole run of protocol bees at the normal-day mix (`--mix` names another), recorded like any other. Users double from `--start` until a step goes bad, then the gap between the last good step and the first bad one is halved until it is no wider than a tenth of the last good step (`--resolution`). While each step runs, drexbot samples `docker stats` for every service of the store's Compose project (`--store-project`) and sets its CPU use against its own cap.
+
+```sh
+MAGENTO_DISPOSABLE=1 drexbot swarm step --url http://localhost:8080 --sku 24-MB01 \
+  --store-project shop --seconds 120 --fpm-workers 5
+```
+
+- **A step is bad when more users stop buying more answers:** the store answered less than half as much extra as the extra users asked for, against the nearest good step with fewer users. It is also bad when the p95 of every request, or of the slowest checkout step, is twice the first step's, or when 1% of its requests fail. Twice, because the histograms bucket at 25% and one bucket up is noise. All of these are conventions, not measurements.
+- **Start below saturation.** Latency is read against the first step, so a first step that already queues hides the knee: begin at one or two users (`--start`) unless you know the store.
+- **A step where 5% of requests fail is the break,** and the test stops at once, whatever is left to try. So does a bad step that came while this machine's own load was at 75% of its cores or more, because then the knee may be the machine's rather than the store's, and a step whose bees' teardown was not verified.
+- **The store must run inside caps of its own,** so it saturates on them: a CPU cap on each service, set in its Compose files. A service without a cap is sampled but cannot be read against one, and is left out of the ratios.
+- **The answer is ratios, with the caps beside them:** orders a minute per store CPU, per PHP CPU, and per PHP-FPM worker when `--fpm-workers` gives `pm.max_children`; requests a second per store CPU; and the service nearest its cap at the first bad step, which is the one that gives first. Users per step say how the load was set and nothing more: a count of shoppers means nothing for a store with other caps.
+- **It places orders**, so it needs `MAGENTO_DISPOSABLE=1` like any mix that orders, and a SKU, from the baseline or `--sku`. `--most` (640) is the most users it will try before saying there is no knee.
+
+An example, with made-up figures:
+
+```text
+  step test against http://localhost:8080, mix normal-day, 120s a step
+    users  verdict  a second  p95       checkout p95  failed  busiest service            machine
+    1      good     12.4      52 ms     331 ms        0.0%    php 21% of 2 CPU           8%
+    2      good     24.1      56 ms     331 ms        0.0%    php 40% of 2 CPU           9%
+    4      good     45.0      69 ms     414 ms        0.0%    php 77% of 2 CPU           11%
+    8      knee     58.2      212 ms    1010 ms       0.0%    php 98% of 2 CPU           12%
+    6      knee     52.0      135 ms    646 ms        0.0%    php 93% of 2 CPU           12%
+    5      good     51.3      87 ms     517 ms        0.0%    php 88% of 2 CPU           11%
+
+  the knee is between 5 and 6 users
+  at the last good step: 3.10 orders a minute per store CPU, 10.85 per PHP CPU, 4.34 per PHP-FPM worker; 7.3 requests a second per store CPU
+  gives first: php 93% of 2 CPU at the first bad step, php 88% of 2 CPU at the last good one
+  the store's caps: db 1, php 2, web 0.5 CPU; 5 PHP-FPM workers
+  the machine stayed under 75% load at every step, so the knee is the store's
+```
+
+**A day's load is then set as a fraction of the knee**, such as half of it for a normal day and nine tenths for a stress run, rather than as a number of users that only fits one store.
 
 ## Where bees run
 
