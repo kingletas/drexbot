@@ -1,5 +1,5 @@
 // The protocol bee: k6 users asking for the store's pages over HTTP, writing the same `bee/1` lines as the browser bee.
-// With a BEE_MIX that orders, a user is a stream of shoppers who browse, fill a guest cart over Magento's REST API, or check out.
+// A BEE_MIX that orders makes a user a stream of shoppers; BEE_ORDERS and BEE_PER_SECONDS make k6 start guest orders at a set rate instead.
 // k6 users share no state, so each histogram bucket is a k6 counter that k6 adds up across users.
 import http from 'k6/http'
 import { Counter } from 'k6/metrics'
@@ -69,12 +69,69 @@ const mixFrom = env => {
 }
 // mix: end
 
+// rate: begin (repeats src/swarm/orders.ts; a unit test holds the users it sizes equal)
+// The seconds an order is allowed before another user is counted on for the next. A checkout is five
+// requests, normally a few seconds and each cut off at 30, so a minute is generous.
+const ORDER_SECONDS = 60
+
+// The rate the bee was told to hold, undefined when it was told none, or the reason it must not start.
+const rateFrom = env => {
+	if (env.BEE_ORDERS === undefined || env.BEE_ORDERS === '') return undefined
+	const orders = Number(env.BEE_ORDERS)
+	const perSeconds = Number(env.BEE_PER_SECONDS)
+	if (!Number.isInteger(orders) || orders < 1) {
+		throw new Error(`BEE_ORDERS must be a whole number above 0, not "${env.BEE_ORDERS}"`)
+	}
+	if (!Number.isInteger(perSeconds) || perSeconds < 10) {
+		throw new Error(
+			`BEE_PER_SECONDS must be a whole number of seconds, at least 10, not "${env.BEE_PER_SECONDS ?? ''}"`,
+		)
+	}
+	if (env.BEE_MIX !== undefined && env.BEE_MIX !== '' && env.BEE_MIX !== 'browse') {
+		throw new Error(`BEE_ORDERS sets its own pace, and BEE_MIX is not browse but "${env.BEE_MIX}"`)
+	}
+	if (env.BEE_DISPOSABLE !== '1') {
+		throw new Error('BEE_ORDERS places orders, and BEE_DISPOSABLE is not 1')
+	}
+	if (env.BEE_CART_SKU === undefined || env.BEE_CART_SKU === '') {
+		throw new Error('BEE_ORDERS puts a product in every cart, and BEE_CART_SKU names none')
+	}
+	return { orders, perSeconds }
+}
+
+// Users for an order rate: those kept busy when every order takes ORDER_SECONDS (orders a second times that,
+// by Little's law), and twice as many before k6 drops an order, so a slow store shows as dropped orders
+// rather than being answered with ever more users.
+const rateUsers = rate => {
+	const start = Math.max(1, Math.ceil((rate.orders / rate.perSeconds) * ORDER_SECONDS))
+	return { start, most: start * 2 }
+}
+
+const rateScenario = (rate, seconds) => {
+	const users = rateUsers(rate)
+	// k6 starts one order as the run begins and one each interval after, so a window as long as the run also
+	// starts one on its last instant; ending it half an interval early starts exactly the orders asked for.
+	const window = seconds - rate.perSeconds / rate.orders / 2
+	return {
+		executor: 'constant-arrival-rate',
+		rate: rate.orders,
+		timeUnit: `${rate.perSeconds}s`,
+		duration: `${Math.round(window * 1000)}ms`,
+		preAllocatedVUs: users.start,
+		maxVUs: users.most,
+		// An order begun just before the end is let finish rather than counted as the store failing.
+		gracefulStop: `${ORDER_SECONDS}s`,
+	}
+}
+// rate: end
+
 const base = __ENV.BEE_URL.endsWith('/') ? __ENV.BEE_URL : `${__ENV.BEE_URL}/`
 const paths = JSON.parse(__ENV.BEE_PATHS)
-const users = Math.floor(Number(__ENV.BEE_CONCURRENCY))
 const seconds = Math.floor(Number(__ENV.BEE_SECONDS))
 const { name: mixName, mix, sku } = mixFrom(__ENV)
-const ordering = mix.browse < 1
+const rate = rateFrom(__ENV)
+const users = rate === undefined ? Math.floor(Number(__ENV.BEE_CONCURRENCY)) : rateUsers(rate).most
+const ordering = mix.browse < 1 || rate !== undefined
 
 // Pages first, as they have always been numbered; a mix adds the REST steps and the journeys after them.
 const stages = [
@@ -104,13 +161,16 @@ const counters = stages.map((_, s) => ({
 
 export const options = {
 	scenarios: {
-		bee: {
-			executor: 'constant-vus',
-			vus: users,
-			duration: `${seconds}s`,
-			// A checkout begun just before the end is let finish rather than counted as the store failing.
-			gracefulStop: ordering ? '60s' : '5s',
-		},
+		bee:
+			rate === undefined
+				? {
+						executor: 'constant-vus',
+						vus: users,
+						duration: `${seconds}s`,
+						// A checkout begun just before the end is let finish rather than counted as the store failing.
+						gracefulStop: ordering ? '60s' : '5s',
+					}
+				: rateScenario(rate, seconds),
 	},
 	discardResponseBodies: true,
 	summaryTrendStats: ['avg'],
@@ -255,6 +315,10 @@ const shop = journey => {
 }
 
 export default function () {
+	if (rate !== undefined) {
+		shop('order')
+		return
+	}
 	if (!ordering) {
 		const s = (__VU + __ITER) % paths.length
 		note(s, visit(s))
@@ -283,7 +347,14 @@ export function handleSummary(data) {
 			event: 'started',
 			at: started.toISOString(),
 			concurrency: users,
-			...(ordering ? { note: `mix ${mixName}` } : {}),
+			...(ordering
+				? {
+						note:
+							rate === undefined
+								? `mix ${mixName}`
+								: `orders ${rate.orders} every ${rate.perSeconds}s`,
+					}
+				: {}),
 		},
 	]
 	stages.forEach((stage, s) => {
@@ -307,6 +378,13 @@ export function handleSummary(data) {
 			total: sparse(data, `s${s}_total`),
 		})
 	})
-	lines.push({ ...identity, event: 'finished', at: now.toISOString(), concurrency: users })
+	lines.push({
+		...identity,
+		event: 'finished',
+		at: now.toISOString(),
+		concurrency: users,
+		// k6 keeps this count itself, for the orders it had no free user to start.
+		...(rate === undefined ? {} : { dropped: countIn(data, 'dropped_iterations') }),
+	})
 	return { stdout: `${lines.map(line => JSON.stringify(line)).join('\n')}\n` }
 }

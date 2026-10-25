@@ -5,6 +5,7 @@ import { MIXES, type Journey } from '../bee/mix.js'
 import { renderDeploys, type DeployReport } from './deploys.js'
 import { renderShare, type KneeShare } from './knee.js'
 import type { KindResult, Percentiles, RunResult } from './reconcile.js'
+import { intervalText, ordersAskedFor, type Orders } from './orders.js'
 import type { Shape, Via } from './plan.js'
 
 /**
@@ -113,6 +114,26 @@ const ORDER_PLACED_BY: Readonly<Record<BeeKind, string>> = {
 	protocol: 'place-order',
 }
 
+/** The slowest checkout step's p95, from whichever kinds of bee walked the checkout. */
+export const checkoutP95Of = (record: RunRecord): number | undefined => {
+	const p95s = (['browser', 'protocol'] as const).flatMap(kind =>
+		CHECKOUT_STAGES.flatMap(stage => {
+			const p95 = record.result[kind]?.stages[stage]?.total.p95
+			return p95 === undefined ? [] : [p95]
+		}),
+	)
+	return p95s.length === 0 ? undefined : Math.max(...p95s)
+}
+
+/** Orders that exist: a browser saw the success page, a protocol bee had its order placed. */
+export const ordersOf = (record: RunRecord): number => {
+	const served = (kind: BeeKind, stage: string): number => {
+		const result = record.result[kind]?.stages[stage]
+		return (result?.count ?? 0) - (result?.failures ?? 0)
+	}
+	return served('browser', ORDER_PLACED_BY.browser) + served('protocol', ORDER_PLACED_BY.protocol)
+}
+
 /**
  * The shoppers as ratios: the mix asked for beside the mix the run actually
  * drew, each checkout step's time, the step that gives first, and orders per
@@ -175,6 +196,27 @@ const checkoutLines = (
 	return out
 }
 
+/**
+ * The orders a run at a set rate asked for against what became of them. Dropped
+ * orders are the ones k6 had no free user to start, so without them a slow store
+ * would read as a store that was asked for less.
+ */
+const ordersLine = (record: RunRecord, orders: Orders): string => {
+	const result = record.result.protocol
+	const journeys = result?.stages[`${JOURNEY_PREFIX}order`]
+	const started = journeys?.count ?? 0
+	const failed = journeys?.failures ?? 0
+	const dropped =
+		result?.dropped === undefined
+			? 'dropped not known (the bee stopped early)'
+			: `dropped ${result.dropped}`
+	return (
+		`  orders at ${orders.count} every ${intervalText(orders.perSeconds)}: ` +
+		`asked for ${ordersAskedFor(orders, record.shape.seconds)}, started ${started}, ` +
+		`placed ${started - failed}, failed ${failed}, ${dropped}`
+	)
+}
+
 /** The record as a person reads it, set beside the previous comparable run when there is one. */
 export const renderRecord = (record: RunRecord, previous?: RunRecord): string => {
 	const out = [
@@ -210,6 +252,7 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 		out.push(...checkoutLines(record, kind, now, bothKinds))
 	}
 	const combined = record.result.combined
+	if (record.shape.orders !== undefined) out.push('', ordersLine(record, record.shape.orders))
 	out.push(
 		'',
 		`  the store, under both: ${combined.count} requests, ${combined.failures} failed (${(combined.errorRate * 100).toFixed(2)}%)`,

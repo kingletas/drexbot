@@ -18,6 +18,7 @@ Every run is recorded, compared with the last run of the same shape, and ends wi
 - [Reading the record](#reading-the-record)
 - [A run that crosses a deploy](#a-run-that-crosses-a-deploy)
 - [Finding the store's knee](#finding-the-stores-knee)
+- [Shopping every day](#shopping-every-day)
 - [Where bees run](#where-bees-run)
 - [Stopping, and what happens when something dies](#stopping-and-what-happens-when-something-dies)
 - [How big a bee should be](#how-big-a-bee-should-be)
@@ -71,6 +72,7 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | `--forward PORT=HOST:PORT`             | none           | A relay inside every bee; see [Where bees run](#where-bees-run)                           |
 | `--network NAME`                       | none           | With `--via docker`, start the bees on a Docker network the store is on                   |
 | `--mix NAME`                           | `browse`       | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
+| `--orders N --per DURATION`            | none           | Orders at a set rate; see [Orders at a set rate](#orders-at-a-set-rate)                   |
 | `--sku SKU`                            | the baseline's | The simple product protocol bees add to carts over REST                                   |
 | `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
 | `--deploy-ledger FILE`                 | none           | A deploy tool's audit log; see [Deploys](#a-run-that-crosses-a-deploy)                    |
@@ -139,6 +141,25 @@ Each request is its own stage with its own counts and histograms, and `cart`, `s
 ```
 
 A checkout journey is not started with less than a minute of load left, and a run with a mix gives each bee three minutes past its load instead of one, so a checkout begun near the end can finish.
+
+### Orders at a set rate
+
+**`--orders N --per DURATION` makes one protocol bee place N orders in every DURATION, evenly,** where a mix places them as a share of shoppers at whatever pace the users run. DURATION is a whole number with `s`, `m` or `h`, such as `60s`, `5m` or `1h`, and at least `10s`. The bee asks k6 for a constant arrival rate: an order is started every DURATION / N whether or not the last one has finished, so a slow store does not slow the load down. Every order is the checkout in the table above, and the record reads it like any other.
+
+```sh
+MAGENTO_DISPOSABLE=1 drexbot swarm run --env shop --url http://localhost:8080 --sku 24-MB01 \
+  --orders 25 --per 5m --seconds 3600
+```
+
+- **It places orders, so it has the gates of a mix that does:** `MAGENTO_DISPOSABLE=1`, a SKU from the baseline or `--sku`, and `BEE_DISPOSABLE=1` handed to the bee by the plan.
+- **It runs alone.** It is refused beside `--mix`, `--protocol-users` or `--of-knee`, with browser bees (`--browser-bees` defaults to 0 with `--orders`), with more than one protocol bee, and unless the run lasts a whole number of DURATIONs, so the orders it asks for are exactly the orders k6 starts. A rate shared between bees would drift.
+- **Users are sized from the rate.** The bee starts the users that stay busy when every order takes a minute (orders a second times 60, at least 1) and may run twice as many. An order that finds none free is not started, and k6 counts it as dropped.
+- **The record counts what happened to the orders:** one line with the orders asked for (N times the run's seconds over DURATION, rounded down), started, placed, failed and dropped. Dropped orders are the ones the store was too slow to be given, so a store that falls behind reads as one that was asked for more than it took, not as one that was asked for less.
+- **Runs at different rates are not compared with each other,** because the rate is part of the run's shape.
+
+```text
+  orders at 25 every 5m: asked for 300, started 296, placed 290, failed 6, dropped 4
+```
 
 ## Reading the record
 
@@ -243,6 +264,43 @@ MAGENTO_DISPOSABLE=1 drexbot swarm run --url http://localhost:8080 --mix normal-
 - **It sets the bees itself**, protocol bees only, as the knee was measured, spread over as few bees as `--users-per-bee` allows. `--protocol-users`, `--protocol-bees` or browser bees beside it are refused, as are a fraction outside 0 to 1 and a store with no knee measured, which names the `swarm step` to run.
 - **The run says what it was set from**: the record and its printout carry the fraction, the step test's id, when it was measured and its caps. A knee measured under other caps, or long ago, is still read; the date and caps beside it are there to tell.
 
+## Shopping every day
+
+**A showcase store can have customers ordering steadily with no one starting runs.** `drexbot swarm shop` is one run, started at the rate the time of day calls for, and a user timer starts it every five minutes. Each run is one five-minute slice, and its record is that slice. The default rate is 25 orders a slice inside a night window that holds the daily deploy and 5 a slice the rest of the day.
+
+```sh
+MAGENTO_DISPOSABLE=1 drexbot swarm shop --url http://localhost:8080 --env showcase \
+  --night 01:00-05:00 --sku 24-MB01 --network shop_default
+```
+
+- **`--night HH:MM-HH:MM` is local time and is required.** The window includes its start minute and not its end minute, and a window may cross midnight, such as `22:00-02:00`. `--night-orders` (25) and `--day-orders` (5) set the two rates, and `--per` (`5m`) the slice.
+- **It is `swarm run` with the rate filled in,** through the same code path, with every other `swarm run` flag passed through; `--orders` is its own and is refused.
+- **A slice is not all load.** A run also needs time to start its bee and remove it, and systemd leaves a service that is still running alone when the next tick comes, so that slice would be lost. Each slice therefore loads for the slice less 60 seconds, 240 of 300 by default, and paces its whole slice's orders over that load: a night slice asks for 25 orders in 240 seconds, so the rate per slice is exactly the one set. `--seconds` shortens the load further, never past the 60 seconds' room.
+- **The timer is installed by hand, on the machine that runs the bees, and nothing here does it.** `contrib/systemd/` holds the templates: `drexbot-shop.service`, `drexbot-shop.timer` with `Persistent=false` so a slice missed while the machine was off is not caught up, and `drexbot-shop.env.example`, the flags and `MAGENTO_DISPOSABLE=1` the service reads from `~/.config/drexbot/shop.env`. Each file's header says what to edit and how to enable it.
+
+**`drexbot swarm day DATE --deploy-ledger FILE` reads the day afterwards.** It takes every run record that started on DATE in local time, for one store with `--url` or each store apart without it, and places each run against each deploy the ledger holds for that day, by the run's start and finish against the deploy's `deploy.started` and its `deploy.finished` or `deploy.failed`. Any run that overlaps the deploy is _during_ it. _Before_ and _after_ are the same length, two hours either side of the deploy unless `--around` says otherwise: a run that ends by the deploy's start and began within that span is _before_, and one that starts at or after the deploy's end and ended within it is _after_. The rest of the day is in no band, and the report says how many runs that is, because the day after a night deploy is longer and at another rate, and would read worse after any deploy. A deploy with no closing record counts as lasting to the end of the day. It reads the ledger with the same reader as `--deploy-ledger` on a run, so a line that does not parse is refused, with the file and line, and exit code 2.
+
+An example, with made-up figures:
+
+```text
+  2026-11-01 (local time), deploys from ./showcase.audit.jsonl: 1 that day
+
+  http://localhost:8080: 288 run(s)
+
+    deploy 20261101_0210000001_showcase on showcase: success, 2026-11-01T02:10:00Z to 2026-11-01T02:16:00Z
+              runs  orders asked  orders placed  failed requests  checkout p95, highest run's
+      before  24    600           598            12               480 ms
+      during  2     50            31             140              4000 ms
+      after   23    575           571            10               510 ms
+      239 run(s) of the day fall outside these bands
+```
+
+- **Orders asked is what each run was given,** `count * seconds / per` rounded down, from the run's shape. A record made without a rate has none, and shows `-`; a band where only some runs say shows the sum of those and how many.
+- **Orders placed** are the orders that were served: the success page for a browser bee, the `place-order` step for a protocol bee.
+- **Checkout p95 is the highest of the runs' p95s,** and says so in its heading, because a record keeps percentiles and not histograms, and percentiles cannot be added or averaged. Read it as the worst slice in the band.
+- **A day with no deploy is one band, the whole day,** and the report says there was none.
+- **The same report is written as JSON** to `results/swarm/day/DATE.json`, one file for the day whichever stores it covers, so a report for one store with `--url` replaces the report for all of them.
+
 ## Where bees run
 
 **This machine is the default,** with a budget of half its CPUs and half its memory. A run that doesn't fit is refused before it starts.
@@ -323,8 +381,10 @@ A bee is any image that reads these variables and writes the `bee/1` lines. Stan
 | `BEE_CART_PATH`      | Browser bee: the product a cart or order journey buys              |
 | `BEE_CART_SKU`       | Protocol bee: the simple product a cart or order journey adds      |
 | `BEE_DISPOSABLE`     | Either kind: `1`, and only `1`, lets a mix place orders            |
+| `BEE_ORDERS`         | Protocol bee: orders to place in every `BEE_PER_SECONDS`, evenly   |
+| `BEE_PER_SECONDS`    | Protocol bee: the interval of `BEE_ORDERS`, at least 10            |
 
-A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
+A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. A protocol bee at a set rate adds `dropped` to its `finished` line: the orders k6 could not start for want of a free user. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
 
 ## What it does not do
 

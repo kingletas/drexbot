@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { StoreBaseline } from '../magento/baseline.js'
 import type { BeeKind } from '../bee/lines.js'
 import { MIXES, type MixName } from '../bee/mix.js'
+import { intervalText, orderUsers } from './orders.js'
 import type { BeeHost } from './settings.js'
 
 /**
@@ -31,6 +32,8 @@ export interface Shape {
 	readonly seconds: number
 	/** Which journeys the bees' shoppers take; unset, they browse as they always have. */
 	readonly mix?: MixName
+	/** One protocol bee places this many orders in every `perSeconds`, evenly; set by `--orders N --per DURATION`. */
+	readonly orders?: { readonly count: number; readonly perSeconds: number }
 }
 
 export interface BeeOrder {
@@ -83,6 +86,9 @@ export const shapeKey = (shape: Shape, host: string, via: Via): string =>
 		`protocol ${shape.protocol.bees}x${shape.protocol.users}@${shape.protocol.cpus}cpu`,
 		`${shape.seconds}s`,
 		...(shape.mix === undefined || shape.mix === 'browse' ? [] : [`mix ${shape.mix}`]),
+		...(shape.orders === undefined
+			? []
+			: [`orders ${shape.orders.count} every ${intervalText(shape.orders.perSeconds)}`]),
 		`${host}/${via}`,
 	].join(', ')
 
@@ -113,25 +119,53 @@ export interface PlanInput {
 	readonly storeCpus?: number
 }
 
+/** Why a run at a set rate cannot start, or undefined when its shape can carry one. */
+const refuseRate = (shape: Shape, rate: NonNullable<Shape['orders']>): string | undefined => {
+	if (shape.mix !== undefined) {
+		return `--orders paces the orders itself and cannot be used with --mix ${shape.mix}; leave --mix out`
+	}
+	if (shape.browser.bees > 0) {
+		return `--orders runs with no browser bees, and --browser-bees is ${shape.browser.bees}; set --browser-bees 0 or leave it out`
+	}
+	if (shape.protocol.bees !== 1) {
+		return `--orders places its orders from exactly one protocol bee, not ${shape.protocol.bees}; use --protocol-bees 1 (a rate shared out between bees would drift)`
+	}
+	if (shape.seconds >= 10 && shape.seconds % rate.perSeconds !== 0) {
+		return (
+			`a run at a set rate lasts a whole number of intervals, so the orders it asks for are the orders it starts; ` +
+			`--seconds ${shape.seconds} is not a multiple of ${intervalText(rate.perSeconds)}, so give --seconds ` +
+			`${Math.max(1, Math.round(shape.seconds / rate.perSeconds)) * rate.perSeconds}, or a --per that divides it`
+		)
+	}
+	return undefined
+}
+
 /** The plan, or the reason there cannot be one. */
 export const planRun = (input: PlanInput): RunPlan | string => {
 	const { shape, host } = input
+	const rate = shape.orders
+	const refusedRate = rate === undefined ? undefined : refuseRate(shape, rate)
+	if (refusedRate !== undefined) return refusedRate
 	if (shape.browser.bees + shape.protocol.bees === 0) return 'a run needs at least one bee'
 	if (shape.seconds < 10) return 'a run needs at least 10 seconds of load to say anything'
 	const mix = MIXES[shape.mix ?? 'browse']
+	// A rate puts a product in every cart and places every order, as a mix that orders does.
+	const fills = mix.browse < 1 || rate !== undefined
+	const places = mix.order > 0 || rate !== undefined
+	const who = rate === undefined ? `the ${shape.mix ?? ''} mix` : '--orders'
 	if (mix.browse < 1 && shape.browser.bees > 0 && input.cartPath === undefined) {
 		return `the ${shape.mix ?? ''} mix puts products in carts, and the store baseline names no product to buy`
 	}
-	if (mix.browse < 1 && shape.protocol.bees > 0 && input.cartSku === undefined) {
+	if (fills && shape.protocol.bees > 0 && input.cartSku === undefined) {
 		return (
-			`the ${shape.mix ?? ''} mix has protocol bees add a product to a cart over REST by SKU, ` +
+			`${who} has protocol bees add a product to a cart over REST by SKU, ` +
 			'and the store baseline holds none; give the SKU of a simple product in stock with --sku ' +
 			"(a baseline captured again finds one only when the first category's first page lists one)"
 		)
 	}
-	if (mix.order > 0 && input.disposable !== true) {
+	if (places && input.disposable !== true) {
 		return (
-			`the ${shape.mix ?? ''} mix places orders, which nothing here can take back; ` +
+			`${who} places orders, which nothing here can take back; ` +
 			'set MAGENTO_DISPOSABLE=1 only for a store you would not mind finding test orders in'
 		)
 	}
@@ -149,7 +183,7 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	const run = input.run ?? runId()
 	// Starting Chromium and writing the last window both fall outside the load, so
 	// the bee is given room for them, and for a checkout begun just before the end.
-	const lifetime = shape.seconds + (mix.browse < 1 ? 180 : 60)
+	const lifetime = shape.seconds + (fills ? 180 : 60)
 	const common = {
 		BEE_RUN: run,
 		BEE_URL: input.url,
@@ -159,11 +193,17 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 		...(input.forward === undefined ? {} : { BEE_FORWARD: input.forward }),
 		...(shape.mix === undefined ? {} : { BEE_MIX: shape.mix }),
 		...(input.cartPath === undefined || mix.browse === 1 ? {} : { BEE_CART_PATH: input.cartPath }),
-		...(mix.order > 0 ? { BEE_DISPOSABLE: '1' } : {}),
+		...(places ? { BEE_DISPOSABLE: '1' } : {}),
 	}
 	const order = (kind: BeeKind, n: number): BeeOrder => {
 		const size = kind === 'browser' ? shape.browser : shape.protocol
-		const concurrency = kind === 'browser' ? shape.browser.workers : shape.protocol.users
+		// A rate sizes its own users, so the bee is told the most it may run.
+		const concurrency =
+			kind === 'browser'
+				? shape.browser.workers
+				: rate === undefined
+					? shape.protocol.users
+					: orderUsers(rate).most
 		const id = `${input.beePrefix === undefined ? '' : `${input.beePrefix}-`}${kind}-${n + 1}`
 		return {
 			id,
@@ -176,8 +216,11 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 				...common,
 				BEE_ID: id,
 				BEE_CONCURRENCY: String(concurrency),
-				...(kind === 'protocol' && input.cartSku !== undefined && mix.browse < 1
+				...(kind === 'protocol' && input.cartSku !== undefined && fills
 					? { BEE_CART_SKU: input.cartSku }
+					: {}),
+				...(kind === 'protocol' && rate !== undefined
+					? { BEE_ORDERS: String(rate.count), BEE_PER_SECONDS: String(rate.perSeconds) }
 					: {}),
 			},
 		}

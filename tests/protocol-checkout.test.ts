@@ -13,6 +13,7 @@ import {
 	type StageWindow,
 } from '../src/bee/lines.js'
 import { journeyFor, MIXES, type Mix } from '../src/bee/mix.js'
+import { orderUsers, ORDER_SECONDS } from '../src/swarm/orders.js'
 import { planRun, shapeKey, type RunPlan, type Shape } from '../src/swarm/plan.js'
 import { reconcile } from '../src/swarm/reconcile.js'
 import { renderRecord, RECORD_TAG, type RunRecord } from '../src/swarm/record.js'
@@ -327,6 +328,8 @@ const runBee = (
 	env: Record<string, string>,
 	respond: (sent: Sent) => FakeResponse,
 	iterations: readonly number[],
+	// Counters k6 keeps for itself, such as dropped_iterations, which the bee did not count.
+	k6Counts: Readonly<Record<string, number>> = {},
 ) => {
 	const script = readFileSync(join(ROOT, 'bees', 'protocol', 'bee.js'), 'utf8')
 		.replace(/^import .*$/gm, '')
@@ -386,7 +389,7 @@ const runBee = (
 	const bee = runInNewContext(`${script}\n({ iterate, handleSummary, options })`, sandbox) as {
 		iterate: () => void
 		handleSummary: (data: unknown) => { stdout: string }
-		options: { scenarios: { bee: { gracefulStop: string } } }
+		options: { scenarios: { bee: Record<string, unknown> & { gracefulStop: string } } }
 	}
 	for (let i = 0; i < iterations.length; i++) {
 		sandbox.__ITER = i
@@ -395,12 +398,17 @@ const runBee = (
 		bee.iterate()
 	}
 	const metrics = Object.fromEntries(
-		[...counts].map(([name, count]) => [name, { values: { count } }]),
+		[...counts, ...Object.entries(k6Counts)].map(([name, count]) => [name, { values: { count } }]),
 	)
 	const written = beeLinesIn(
 		bee.handleSummary({ metrics, state: { testRunDurationMs: 1_000 } }).stdout,
 	)
-	return { sent, lines: written, gracefulStop: bee.options.scenarios.bee.gracefulStop }
+	return {
+		sent,
+		lines: written,
+		gracefulStop: bee.options.scenarios.bee.gracefulStop,
+		scenario: bee.options.scenarios.bee,
+	}
 }
 
 const REST = 'http://store.example:8080/rest/V1/guest-carts'
@@ -545,5 +553,131 @@ describe('the k6 bee running a checkout, with k6 and the store replaced', () => 
 		const text = renderRecord(runRecord({ result }))
 		assert.match(text, /orders placed: 2,/)
 		assert.match(text, /place-order +p50/)
+	})
+})
+
+describe('the k6 bee placing orders at a set rate', () => {
+	const rate = {
+		BEE_ORDERS: '25',
+		BEE_PER_SECONDS: '300',
+		BEE_SECONDS: '600',
+		BEE_CART_SKU: 'TEST-SKU-1',
+		BEE_DISPOSABLE: '1',
+	}
+
+	it('keeps the users running as a stream of pages when no rate is set', () => {
+		const { scenario } = runBee({}, store, [])
+		assert.equal(scenario['executor'], 'constant-vus')
+		assert.equal(scenario['vus'], 2)
+	})
+
+	it('arrives at the rate, in the interval, ending half an interval early so it starts only the orders asked for', () => {
+		// 25 every 300 s is one every 12 s: starts at 0, 12, ... 588 are 50, and a window to 600 would start a 51st.
+		const { scenario } = runBee(rate, store, [])
+		assert.deepEqual(
+			{ ...scenario },
+			{
+				executor: 'constant-arrival-rate',
+				rate: 25,
+				timeUnit: '300s',
+				duration: '594000ms',
+				preAllocatedVUs: 5,
+				maxVUs: 10,
+				gracefulStop: '60s',
+			},
+		)
+	})
+
+	it('sizes its users as src/swarm/orders.ts does, from orders a second and a minute an order', () => {
+		for (const [orders, per] of [
+			[1, 10],
+			[5, 300],
+			[25, 300],
+			[7, 45],
+			[120, 3_600],
+			[1_000, 60],
+		] as const) {
+			const { scenario } = runBee(
+				{ ...rate, BEE_ORDERS: String(orders), BEE_PER_SECONDS: String(per) },
+				store,
+				[],
+			)
+			const users = orderUsers({ count: orders, perSeconds: per })
+			assert.equal(scenario['preAllocatedVUs'], users.start, `${orders} per ${per}s`)
+			assert.equal(scenario['maxVUs'], users.most, `${orders} per ${per}s`)
+			assert.equal(scenario['gracefulStop'], `${ORDER_SECONDS}s`)
+		}
+	})
+
+	it('has at least one user to start with, however slow the rate', () => {
+		const { scenario } = runBee({ ...rate, BEE_ORDERS: '1', BEE_PER_SECONDS: '3600' }, store, [])
+		assert.equal(scenario['preAllocatedVUs'], 1)
+		assert.equal(scenario['maxVUs'], 2)
+	})
+
+	it('places one order per iteration, whatever the roll, and writes nothing about pages', () => {
+		const { sent, lines } = runBee(rate, store, [0.99, 0.5])
+		assert.equal(sent.length, 10)
+		assert.equal(sent.filter(request => request.url.endsWith('/payment-information')).length, 2)
+		assert.equal(sent.filter(request => request.method === 'GET').length, 0)
+		const stages = lines.flatMap(line => (line.event === 'window' ? [line.stage] : []))
+		assert.deepEqual(stages, [
+			'cart-create',
+			'cart',
+			'shipping-estimate',
+			'shipping',
+			'place-order',
+			'journey:order',
+		])
+		assert.equal(stageOf(lines, 'journey:order')?.count, 2)
+		const started = lines[0]
+		assert.equal(started?.event === 'started' ? started.concurrency : 0, 10)
+		assert.equal(started?.event === 'started' ? started.note : '', 'orders 25 every 300s')
+	})
+
+	it('counts an order the store refused as a failed journey, and goes on to the next', () => {
+		const refusing = (request: Sent): FakeResponse =>
+			request.url.endsWith('/payment-information') ? { status: 500 } : store(request)
+		const { lines } = runBee(rate, refusing, [0, 0])
+		assert.equal(stageOf(lines, 'journey:order')?.count, 2)
+		assert.equal(stageOf(lines, 'journey:order')?.failures, 2)
+		assert.equal(stageOf(lines, 'place-order')?.failures, 2)
+	})
+
+	it('reports the orders k6 could not start on its finished line, as it counted them', () => {
+		const { lines } = runBee(rate, store, [0], { dropped_iterations: 7 })
+		const finished = lines.at(-1)
+		assert.equal(finished?.event, 'finished')
+		assert.equal(finished?.event === 'finished' ? finished.dropped : -1, 7)
+	})
+
+	it('reports none dropped when k6 kept no count, which it does when nothing was dropped', () => {
+		const { lines } = runBee(rate, store, [0])
+		const finished = lines.at(-1)
+		assert.equal(finished?.event === 'finished' ? finished.dropped : -1, 0)
+	})
+
+	it('writes no dropped count for a run that is not at a rate', () => {
+		const { lines } = runBee(ordering, store, [0], { dropped_iterations: 7 })
+		const finished = lines.at(-1)
+		assert.equal(finished?.event, 'finished')
+		assert.equal(finished !== undefined && 'dropped' in finished, false)
+	})
+
+	it('refuses to start without the permission, a SKU, a real rate or its own pace', () => {
+		const refused = (env: Record<string, string>): void =>
+			void runBee({ ...rate, ...env }, store, [])
+		assert.throws(
+			() => refused({ BEE_DISPOSABLE: '' }),
+			/BEE_ORDERS places orders, and BEE_DISPOSABLE is not 1/,
+		)
+		assert.throws(() => refused({ BEE_DISPOSABLE: 'true' }), /BEE_DISPOSABLE/)
+		assert.throws(() => refused({ BEE_CART_SKU: '' }), /BEE_CART_SKU names none/)
+		assert.throws(() => refused({ BEE_ORDERS: '0' }), /BEE_ORDERS must be a whole number above 0/)
+		assert.throws(() => refused({ BEE_ORDERS: '2.5' }), /BEE_ORDERS must be a whole number/)
+		assert.throws(() => refused({ BEE_PER_SECONDS: '9' }), /BEE_PER_SECONDS must be/)
+		assert.throws(() => refused({ BEE_PER_SECONDS: '' }), /BEE_PER_SECONDS must be/)
+		assert.throws(() => refused({ BEE_MIX: 'normal-day' }), /BEE_MIX is not browse/)
+		assert.doesNotThrow(() => refused({ BEE_MIX: 'browse' }))
 	})
 })

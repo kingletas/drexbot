@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import {
+	besideKnee,
+	fractionOf,
 	kneeRecordOf,
 	latestKnee,
+	missingKnee,
 	renderShare,
 	shareOf,
 	spread,
@@ -81,6 +84,41 @@ describe('a run set from the knee', () => {
 			)
 	})
 
+	it('quotes what was typed when it is not a number, never NaN', () => {
+		assert.match(String(fractionOf('abc')), /it was given "abc"$/)
+		assert.match(String(fractionOf(undefined)), /it was given nothing$/)
+		assert.match(String(fractionOf('')), /it was given nothing$/)
+		assert.match(String(fractionOf('--url')), /it was given nothing$/)
+		assert.equal(fractionOf('0.5'), 0.5)
+		for (const typed of ['abc', undefined, ''])
+			assert.doesNotMatch(String(fractionOf(typed)), /NaN/)
+	})
+
+	it('refuses a rate of orders beside it with a sentence of its own', () => {
+		for (const flags of [
+			['--orders', '25'],
+			['--per', '5m'],
+			['--orders', '25', '--per', '5m'],
+		])
+			assert.match(
+				String(besideKnee(['--of-knee', '0.5', ...flags])),
+				/--of-knee sets how many shoppers run, and --orders sets how many orders arrive/,
+			)
+		assert.match(
+			String(besideKnee(['--of-knee', '0.5', '--protocol-users', '9'])),
+			/--of-knee sets --protocol-users itself/,
+		)
+		assert.equal(besideKnee(['--of-knee', '0.5', '--url', 'http://shop.example:8080']), undefined)
+	})
+
+	it('says how to measure the missing knee at the mix the run asked for', () => {
+		assert.match(missingKnee('http://shop.example:8080', 'normal-day'), /--store-project NAME$/)
+		assert.match(
+			missingKnee('http://shop.example:8080', 'checkout-stress'),
+			/drexbot swarm step --url http:\/\/shop\.example:8080 --store-project NAME --mix checkout-stress$/,
+		)
+	})
+
 	it('spreads users over as few bees as hold them, never more users than asked', () => {
 		assert.deepEqual(spread(36, 100), { bees: 1, each: 36 })
 		assert.deepEqual(spread(250, 100), { bees: 3, each: 83 })
@@ -123,6 +161,13 @@ describe('the knee on disk', () => {
 		assert.equal(latestKnee(dir, 'http://shop.example:8080', 'normal-day')?.lastGood.users, 6)
 		assert.equal(latestKnee(dir, 'http://nowhere.example', 'normal-day'), undefined)
 		assert.equal(latestKnee(results(), 'http://shop.example:8080', 'normal-day'), undefined)
+	})
+
+	it("finds the knee by the store's origin, as swarm-targets does, so a trailing slash still finds it", () => {
+		const dir = results()
+		writeKnee(dir, knee(6))
+		assert.equal(latestKnee(dir, 'http://shop.example:8080/', 'normal-day')?.lastGood.users, 6)
+		assert.equal(latestKnee(dir, 'http://shop.example:8081/', 'normal-day'), undefined)
 	})
 
 	it('is never read as a run', () => {
