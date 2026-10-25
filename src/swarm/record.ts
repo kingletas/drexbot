@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { CHECKOUT_STAGES, JOURNEY_PREFIX, isJourneyStage, type BeeKind } from '../bee/lines.js'
 import { MIXES, type Journey } from '../bee/mix.js'
 import { renderDeploys, type DeployReport } from './deploys.js'
+import { renderShare, type KneeShare } from './knee.js'
 import type { KindResult, Percentiles, RunResult } from './reconcile.js'
 import type { Shape, Via } from './plan.js'
 
@@ -40,6 +41,8 @@ export interface RunRecord {
 	readonly storeCpus?: number
 	/** The deploys the run crossed, from the ledger `--deploy-ledger` named; absent when none was named. */
 	readonly deploys?: DeployReport
+	/** The fraction of a measured knee the run's users were set from, when `--of-knee` set them. */
+	readonly knee?: KneeShare
 }
 
 export const recordsDirectory = (results: string): string => join(results, 'swarm')
@@ -178,6 +181,7 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 		'',
 		`  ${record.run}  ${record.target}`,
 		`  ${record.shapeKey}`,
+		...(record.knee === undefined ? [] : [renderShare(record.knee)]),
 		previous === undefined
 			? '  no earlier run of this shape against this store to compare with'
 			: `  compared with ${previous.run}`,

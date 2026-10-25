@@ -233,7 +233,15 @@ An example, with made-up figures:
   the machine stayed under 75% load at every step, so the knee is the store's
 ```
 
-**A day's load is set as a fraction of the knee, by hand for now:** read the knee from the step test, choose the fraction, such as half of it for a normal day and nine tenths for a stress run, and pass that many users to `swarm run` with `--protocol-users`. No flag reads the knee for you yet.
+**A day's load is then set as a fraction of the knee.** A step test that ends on the store's own limit writes its knee to `results/swarm/knee/`: the store, the mix, the last good and first bad step, and the caps. It writes none when it stopped on a busy machine, by hand, or on an unverified teardown. `swarm run --of-knee F` reads the newest knee for its store, measured at `--knee-mix` (normal-day unless named), and runs protocol bees at F of its last good step, such as half for a normal day and nine tenths for a stress run:
+
+```sh
+MAGENTO_DISPOSABLE=1 drexbot swarm run --url http://localhost:8080 --mix normal-day --of-knee 0.5 --seconds 600
+```
+
+- **The fraction is of the last good step,** not the first bad one, which already asked for more than the store could answer. It rounds down, so half of a last good step of 5 users is 2, and a share under one user is refused rather than rounded up.
+- **It sets the bees itself**, protocol bees only, as the knee was measured, spread over as few bees as `--users-per-bee` allows. `--protocol-users`, `--protocol-bees` or browser bees beside it are refused, as are a fraction outside 0 to 1 and a store with no knee measured, which names the `swarm step` to run.
+- **The run says what it was set from**: the record and its printout carry the fraction, the step test's id, when it was measured and its caps. A knee measured under other caps, or long ago, is still read; the date and caps beside it are there to tell.
 
 ## Where bees run
 
