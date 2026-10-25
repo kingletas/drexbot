@@ -1,0 +1,28 @@
+# drexbot-shop.service: one slice of customers ordering at the showcase store.
+#
+# A template, and nothing installs it. On the machine that runs the bees:
+#   1. Copy this file and drexbot-shop.timer to ~/.config/systemd/user/.
+#   2. Copy drexbot-shop.env.example to ~/.config/drexbot/shop.env and edit it:
+#      the store, the night window, the Docker network, the SKU.
+#   3. systemctl --user daemon-reload
+#      systemctl --user enable --now drexbot-shop.timer
+#
+# Edit before use:
+#   - ExecStart: where `make install` put drexbot. %h is the user's home.
+#   - PATH: uncomment the Environment line when node comes from a version
+#     manager, because a user service does not read the shell's profile.
+#
+# KillSignal=SIGINT makes `swarm run` take its bees down when the service is
+# stopped or times out, instead of leaving containers to stop at their own limit.
+
+[Unit]
+Description=drexbot shop: one slice of customers ordering at the showcase store
+
+[Service]
+Type=oneshot
+# Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/drexbot/shop.env
+ExecStart=%h/bin/drexbot swarm shop $DREXBOT_SHOP_FLAGS
+KillSignal=SIGINT
+TimeoutStartSec=15min
+TimeoutStopSec=2min
