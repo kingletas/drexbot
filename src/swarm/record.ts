@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path'
 import { CHECKOUT_STAGES, JOURNEY_PREFIX, isJourneyStage, type BeeKind } from '../bee/lines.js'
 import { MIXES, type Journey } from '../bee/mix.js'
+import { renderDeploys, type DeployReport } from './deploys.js'
 import type { KindResult, Percentiles, RunResult } from './reconcile.js'
 import type { Shape, Via } from './plan.js'
 
@@ -37,6 +38,8 @@ export interface RunRecord {
 	readonly caveats: readonly string[]
 	/** The CPUs the store was capped at, as the operator gave them. */
 	readonly storeCpus?: number
+	/** The deploys the run crossed, from the ledger `--deploy-ledger` named; absent when none was named. */
+	readonly deploys?: DeployReport
 }
 
 export const recordsDirectory = (results: string): string => join(results, 'swarm')
@@ -207,6 +210,9 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 		'',
 		`  the store, under both: ${combined.count} requests, ${combined.failures} failed (${(combined.errorRate * 100).toFixed(2)}%)`,
 		line('time to first byte', combined.ttfb, previous?.result.combined.ttfb),
+		...(record.deploys === undefined
+			? []
+			: renderDeploys(record.deploys, record.result.protocol !== undefined)),
 		'',
 		record.teardown.verified
 			? `  teardown verified: ${record.teardown.removed} bee container(s) removed, none left`

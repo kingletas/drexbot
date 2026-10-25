@@ -11,6 +11,7 @@ import {
 	type HostRun,
 	type Launcher,
 } from '../../swarm/conductor.js'
+import { deployReport, readLedger } from '../../swarm/deploys.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
@@ -46,7 +47,8 @@ export const SWARM_USAGE = `usage: drexbot swarm COMMAND [flags]
 
   run       start bees against a store, wait, tear down, and record the run
   aws       print the same run as AWS commands for a person to run; runs nothing
-  reconcile DIR   turn the bee lines downloaded after an AWS run into a record
+  reconcile DIR [--deploy-ledger FILE]
+            turn the bee lines downloaded after an AWS run into a record
   images    build both bee images on a bee host
   sweep     remove every bee container on a bee host, from any run
   records   list recorded runs
@@ -75,11 +77,22 @@ Flags for run and aws:
   --sku SKU               the simple product protocol bees add to carts over REST
                           (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
+  --deploy-ledger FILE    run and reconcile only: a deploy tool's audit log (JSONL);
+                          the deploys that fall within the run are recorded, with
+                          their maintenance window
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
 	const index = argv.indexOf(name)
 	return index === -1 ? undefined : argv[index + 1]
+}
+
+/** The deploy ledger a run was told to read, or undefined when it was told none. */
+const ledgerFlag = (argv: readonly string[]): string | undefined => {
+	if (!argv.includes('--deploy-ledger')) return undefined
+	const file = flag(argv, '--deploy-ledger')
+	if (file === undefined || file.startsWith('--')) throw new Error('--deploy-ledger needs a file')
+	return file
 }
 
 const number = (argv: readonly string[], name: string, fallback: number): number => {
@@ -185,6 +198,17 @@ const run = async (
 		)
 		return 2
 	}
+	// Refuse a ledger that is unreadable or malformed now, rather than after the load has run.
+	let ledger: string | undefined
+	try {
+		ledger = ledgerFlag(argv)
+		if (ledger !== undefined) readLedger(ledger)
+	} catch (cause) {
+		process.stderr.write(
+			`drexbot swarm: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+		)
+		return 2
+	}
 	const id = runId()
 	const runs: HostRun[] = []
 	for (const name of hosts) {
@@ -227,12 +251,16 @@ const run = async (
 	const bees = runs.reduce((sum, part) => sum + part.plan.bees.length, 0)
 	say(`run ${id}: ${bees} bee(s) on ${hosts.join(' and ')}, against ${runs[0]?.plan.url ?? ''}`)
 	try {
-		const record = await conductAcross(runs, say, stop)
+		const record = await conductAcross(runs, say, stop, ledger)
 		const records = readRecords(harness.workspace.results)
 		const path = writeRecord(harness.workspace.results, record)
 		process.stdout.write(renderRecord(record, previousFor(record, records)))
 		process.stdout.write(`  recorded in ${path.replace(harness.workspace.root, '.')}\n\n`)
-		return record.teardown.verified && record.result.combined.count > 0 ? 0 : 1
+		return record.teardown.verified &&
+			record.result.combined.count > 0 &&
+			record.deploys?.refused === undefined
+			? 0
+			: 1
 	} finally {
 		process.off('SIGINT', onSignal)
 	}
@@ -290,18 +318,24 @@ const aws = (harness: Harness, options: Options, argv: readonly string[]): numbe
 }
 
 /** A record from an AWS run: the bees' lines as downloaded, with teardown left to the person who ran it. */
-const reconcileDirectory = (harness: Harness, directory: string | undefined): number => {
+const reconcileDirectory = (harness: Harness, argv: readonly string[]): number => {
+	const directory = argv[0]
 	if (directory === undefined || !existsSync(join(directory, 'plan.json'))) {
-		process.stderr.write('usage: drexbot swarm reconcile DIR   (the directory `swarm aws` wrote)\n')
+		process.stderr.write(
+			'usage: drexbot swarm reconcile DIR [--deploy-ledger FILE]   (DIR is the directory `swarm aws` wrote)\n',
+		)
 		return 2
 	}
 	const plan = JSON.parse(readFileSync(join(directory, 'plan.json'), 'utf8')) as RunPlan
 	const lines = beeLinesIn(readFileSync(join(directory, 'bee-lines.txt'), 'utf8'))
+	const ledger = ledgerFlag(argv)
+	const startedAt = lines[0]?.at ?? new Date().toISOString()
+	const finishedAt = lines.at(-1)?.at ?? new Date().toISOString()
 	const record: RunRecord = {
 		drexbot: RECORD_TAG,
 		run: plan.run,
-		startedAt: lines[0]?.at ?? new Date().toISOString(),
-		finishedAt: lines.at(-1)?.at ?? new Date().toISOString(),
+		startedAt,
+		finishedAt,
 		target: plan.url,
 		host: 'aws',
 		via: 'ecs' as const,
@@ -312,11 +346,14 @@ const reconcileDirectory = (harness: Harness, directory: string | undefined): nu
 		caveats: [
 			'teardown on AWS is checked by the person who ran the commands, with the list-tasks block',
 		],
+		...(ledger === undefined
+			? {}
+			: { deploys: deployReport(ledger, { startedAt, finishedAt }, lines) }),
 	}
 	const records = readRecords(harness.workspace.results)
 	writeRecord(harness.workspace.results, record)
 	process.stdout.write(renderRecord(record, previousFor(record, records)))
-	return 0
+	return record.deploys?.refused === undefined ? 0 : 1
 }
 
 const listRecords = (harness: Harness): number => {
@@ -343,7 +380,7 @@ export const swarmCommand = async (
 			case 'aws':
 				return aws(harness, options, rest)
 			case 'reconcile':
-				return reconcileDirectory(harness, rest[0])
+				return reconcileDirectory(harness, rest)
 			case 'images':
 				return await buildImages(harness, rest)
 			case 'sweep':

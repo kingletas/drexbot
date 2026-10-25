@@ -1,5 +1,6 @@
 import { beeLinesIn, type BeeLine } from '../bee/lines.js'
 import { RUN_LABEL, type Docker } from './docker.js'
+import { deployReport } from './deploys.js'
 import { EcsEmulator } from './ecs.js'
 import { shapeKey, type BeeOrder, type RunPlan } from './plan.js'
 import { reconcile } from './reconcile.js'
@@ -109,6 +110,7 @@ export const conductAcross = async (
 	runs: readonly HostRun[],
 	say: Progress,
 	stop: { requested: boolean } = { requested: false },
+	deployLedger?: string,
 ): Promise<RunRecord> => {
 	const first = runs[0]
 	if (first === undefined) throw new Error('a run needs at least one host')
@@ -128,10 +130,8 @@ export const conductAcross = async (
 	)
 
 	const seconds = Math.min(...outcomes.map(outcome => outcome.seconds))
-	const result = reconcile(
-		outcomes.flatMap(outcome => outcome.lines),
-		seconds,
-	)
+	const lines = outcomes.flatMap(outcome => outcome.lines)
+	const result = reconcile(lines, seconds)
 	const several = outcomes.length > 1
 	const caveats = outcomes.flatMap(outcome =>
 		outcome.caveats.map(caveat => (several ? `${outcome.host}: ${caveat}` : caveat)),
@@ -152,11 +152,13 @@ export const conductAcross = async (
 	}
 	const unknown = outcomes.some(outcome => outcome.teardown.leftover < 0)
 	const host = outcomes.map(outcome => outcome.host).join('+')
+	const startedAt = outcomes.map(outcome => outcome.startedAt).sort()[0] ?? new Date().toISOString()
+	const finishedAt = new Date().toISOString()
 	return {
 		drexbot: RECORD_TAG,
 		run: first.plan.run,
-		startedAt: outcomes.map(outcome => outcome.startedAt).sort()[0] ?? new Date().toISOString(),
-		finishedAt: new Date().toISOString(),
+		startedAt,
+		finishedAt,
 		target: first.plan.url,
 		host,
 		via: first.plan.via,
@@ -172,6 +174,9 @@ export const conductAcross = async (
 		},
 		caveats,
 		...(first.plan.storeCpus === undefined ? {} : { storeCpus: first.plan.storeCpus }),
+		...(deployLedger === undefined
+			? {}
+			: { deploys: deployReport(deployLedger, { startedAt, finishedAt }, lines) }),
 	}
 }
 

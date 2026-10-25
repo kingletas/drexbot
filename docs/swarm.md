@@ -16,6 +16,7 @@ Every run is recorded, compared with the last run of the same shape, and ends wi
 - [Before the first run](#before-the-first-run)
 - [A run](#a-run)
 - [Reading the record](#reading-the-record)
+- [A run that crosses a deploy](#a-run-that-crosses-a-deploy)
 - [Where bees run](#where-bees-run)
 - [Stopping, and what happens when something dies](#stopping-and-what-happens-when-something-dies)
 - [How big a bee should be](#how-big-a-bee-should-be)
@@ -71,6 +72,7 @@ drexbot swarm run --url https://store.example --seconds 60 --browser-bees 1 --pr
 | `--mix NAME`                           | `browse`       | What the browser or k6 shoppers do; see [Shoppers who check out](#shoppers-who-check-out) |
 | `--sku SKU`                            | the baseline's | The simple product protocol bees add to carts over REST                                   |
 | `--store-cpus N`                       | none           | The CPUs the store is capped at, so orders read per store CPU                             |
+| `--deploy-ledger FILE`                 | none           | A deploy tool's audit log; see [Deploys](#a-run-that-crosses-a-deploy)                    |
 
 **Without a mix the bees only read.** They ask for pages and nothing else: no form, no cart, no order. What a page view writes on the store (a session, a visitor row) is all a run leaves there.
 
@@ -163,6 +165,37 @@ An example, with made-up figures:
 - **Percentiles are read from histograms every bee writes,** which add up exactly across bees. A reported value is the top of its bucket: never under the true figure, and at most a quarter over it.
 - **A request still waiting when a bee's time runs out is not counted.** A store the bees can't reach therefore shows as zero requests, never as zero failures, and the record says so.
 - Records are JSON under `results/swarm/`, which is not committed: a timing is a fact about the machines that produced it. `drexbot swarm records` lists them.
+
+## A run that crosses a deploy
+
+**`--deploy-ledger FILE` records the deploys that happened while the run loaded the store,** read from the deploy tool's own audit log, so a run that crosses a deploy can be read before, during and after it. `swarm run` and `swarm reconcile DIR` take it; without it nothing changes. The log is the append-only JSONL file `magento-deploy-playbook` writes, one record per line, each with `event`, `recorded_at` (UTC, to the second), `env_name` and `release`. drexbot only reads it: it does not verify the log's hash chain.
+
+```sh
+drexbot swarm run --url http://localhost:8080 --seconds 600 --deploy-ledger ./showcase.audit.jsonl
+```
+
+- **A deploy is kept when any part of it falls within 60 seconds of the run,** either side. The margin covers the one-second resolution of the log and some difference between the clocks. A deploy is one release's records from its `deploy.started` to the next `deploy.started` of that release, so a closing record a person appended late still belongs to it.
+- **Each deploy is recorded** with its release, environment, outcome (`success`, `rolled_back`, `failed` or `not closed`), when it started and ended, and its phases (build, upload, cutover, setup:upgrade) where the log has them. **The maintenance window runs from `maintenance.enabled` to `maintenance.disabled`.** With no `maintenance.disabled` after it the window is recorded as **not closed**, because the store may still be in maintenance; a closing record written by hand is marked as such, since its time is when the person wrote it.
+- **Every time is kept twice:** as the ledger wrote it, and as seconds from the run's start, negative before it. **Those are two clocks:** the ledger's is the deploy control node's and the run's is the machine drexbot runs on, so a skew between them shifts every offset by the same amount.
+- **A line that does not parse is refused,** with its file and line number. `swarm run` checks the ledger before it starts anything, so a ledger it cannot read stops the run with exit code 2. A line written during the run that cannot be read is found afterwards: the run is still recorded, with the refusal in the record, and the command exits 1.
+- **A ledger with no deploy in the window says so,** with how many records it read, so an empty answer is not mistaken for a ledger that was never read.
+
+The deploys are printed under the store's line in the record. An example, with made-up figures:
+
+```text
+  deploys within the run, give or take 60s, from ./showcase.audit.jsonl (times are the control node's clock, seconds are from the run's start):
+  deploy 20261101_1000000001_showcase on showcase: success, +50s to +110s, 60s (2026-11-01T12:00:50Z to 2026-11-01T12:01:50Z)
+    maintenance window: +70s to +90s, 20s (2026-11-01T12:01:10Z to 2026-11-01T12:01:30Z)
+    browser bees' windows around the deploy:
+      before    5 windows  50 requests  0 failed (0.00%)  ttfb p95 102 ms
+      during    6 windows  60 requests  20 failed (33.33%)  ttfb p95 3052 ms
+      after     7 windows  70 requests  0 failed (0.00%)  ttfb p95 102 ms
+    browser bees' windows around the maintenance window:
+      ...
+  protocol bees write one window for the whole run, so they are not split around a deploy
+```
+
+**The split uses the browser bees only.** A browser bee writes a window every 10 seconds (`BEE_WINDOW_SECONDS`), each with the time it was written. A window that ended before the deploy began is _before_, one that began after it ended is _after_, and any window that overlaps it is _during_, so the edges are as coarse as the window. The split is made twice when the deploy took a maintenance window: around the whole deploy, most of which the store serves normally, and around the window alone, which is where a store answers 503. The sides are different lengths, so read failures as a share and p95 as a time rather than comparing counts. **A protocol bee writes one window for the whole run** (k6 reports only at its end), so its requests cannot be placed before or after anything, and the record says so rather than guessing. A split for protocol bees needs interval windows from the protocol bee first.
 
 ## Where bees run
 
