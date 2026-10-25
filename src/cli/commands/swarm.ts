@@ -14,8 +14,11 @@ import {
 import { dayReport, renderDay, writeDay } from '../../swarm/day.js'
 import { deployReport, readLedger } from '../../swarm/deploys.js'
 import {
+	besideKnee,
+	fractionOf,
 	kneeRecordOf,
 	latestKnee,
+	missingKnee,
 	shareOf,
 	spread,
 	usersAt,
@@ -260,20 +263,17 @@ const kneeArgv = (
 	options: Options,
 	argv: readonly string[],
 ): { argv: string[]; share: KneeShare; users: number } | string => {
-	for (const name of ['--protocol-users', '--protocol-bees'])
-		if (argv.includes(name)) return `--of-knee sets ${name} itself; give one or the other`
+	const beside = besideKnee(argv)
+	if (beside !== undefined) return beside
+	const fraction = fractionOf(flag(argv, '--of-knee'))
+	if (typeof fraction === 'string') return fraction
 	if (number(argv, '--browser-bees', 0) > 0)
 		return '--of-knee sets protocol users only, as the knee was measured; drop --browser-bees'
 	const probe = planFrom(harness, options, [...argv, '--browser-bees', '0'], 'local')
 	if (typeof probe === 'string') return probe
 	const kneeMix = flag(argv, '--knee-mix') ?? 'normal-day'
 	const knee = latestKnee(harness.workspace.results, probe.url, kneeMix)
-	if (knee === undefined)
-		return (
-			`no knee measured for ${probe.url} at ${kneeMix}; measure one first with ` +
-			`drexbot swarm step --url ${probe.url} --store-project NAME`
-		)
-	const fraction = Number(flag(argv, '--of-knee'))
+	if (knee === undefined) return missingKnee(probe.url, kneeMix)
 	const users = usersAt(knee, fraction)
 	if (typeof users === 'string') return users
 	const { bees, each } = spread(users, number(argv, '--users-per-bee', 100))

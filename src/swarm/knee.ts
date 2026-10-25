@@ -69,6 +69,15 @@ export const writeKnee = (results: string, knee: KneeRecord): string => {
 	return path
 }
 
+/** A store is its origin, as swarm-targets reads it, so `http://shop.test/` and `http://shop.test` are one store. */
+const originOf = (url: string): string => {
+	try {
+		return new URL(url).origin
+	} catch {
+		return url
+	}
+}
+
 /** The newest knee measured for this store at this mix, or undefined when none was. */
 export const latestKnee = (
 	results: string,
@@ -77,13 +86,42 @@ export const latestKnee = (
 ): KneeRecord | undefined => {
 	const directory = kneeDirectory(results)
 	if (!existsSync(directory)) return undefined
+	const store = originOf(target)
 	return readdirSync(directory)
 		.filter(name => name.endsWith('.json'))
 		.map(name => JSON.parse(readFileSync(join(directory, name), 'utf8')) as KneeRecord)
-		.filter(knee => knee.drexbot === KNEE_TAG && knee.target === target && knee.mix === mix)
+		.filter(
+			knee => knee.drexbot === KNEE_TAG && originOf(knee.target) === store && knee.mix === mix,
+		)
 		.sort((a, b) => a.at.localeCompare(b.at))
 		.at(-1)
 }
+
+/** Why `--of-knee` cannot go beside the other flags given, or undefined when it can. */
+export const besideKnee = (argv: readonly string[]): string | undefined => {
+	if (argv.includes('--orders') || argv.includes('--per'))
+		return (
+			'--of-knee sets how many shoppers run, and --orders sets how many orders arrive; ' +
+			'a run is set by one or the other, so give one'
+		)
+	for (const name of ['--protocol-users', '--protocol-bees'])
+		if (argv.includes(name)) return `--of-knee sets ${name} itself; give one or the other`
+	return undefined
+}
+
+/** The fraction `--of-knee` was given, or why what was typed is not one, quoting it. */
+export const fractionOf = (typed: string | undefined): number | string => {
+	const text = typed === undefined || typed.startsWith('--') ? '' : typed
+	const fraction = text.trim() === '' ? Number.NaN : Number(text)
+	if (Number.isNaN(fraction))
+		return `--of-knee is a fraction of the knee, above 0 and at most 1, such as 0.5; it was given ${text === '' ? 'nothing' : `"${text}"`}`
+	return fraction
+}
+
+/** How to measure the knee a run asked for, with the mix it asked for when that is not the default. */
+export const missingKnee = (url: string, mix: string): string =>
+	`no knee measured for ${url} at ${mix}; measure one first with ` +
+	`drexbot swarm step --url ${url} --store-project NAME${mix === 'normal-day' ? '' : ` --mix ${mix}`}`
 
 /** Users spread over as few bees as hold them, each bee's share rounded down so the whole stays under `users`. */
 export const spread = (users: number, perBee: number): { bees: number; each: number } => {
