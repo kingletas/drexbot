@@ -44,6 +44,8 @@ export interface BeeOrder {
 	readonly cpus: number
 	readonly memory: number
 	readonly env: Readonly<Record<string, string>>
+	/** The cgroup Docker creates the bee under, such as lab.slice; unset, Docker's own. */
+	readonly cgroupParent?: string
 }
 
 export type Via = 'docker' | 'ecs'
@@ -59,6 +61,7 @@ export interface RunPlan {
 	/** Hard limit on each bee's life: its load, its browser's start, and time to write its last lines. */
 	readonly lifetime: number
 	readonly storeCpus?: number
+	readonly cgroupParent?: string
 }
 
 /** The pages both kinds of bee walk, read from the store's own baseline. */
@@ -117,6 +120,19 @@ export interface PlanInput {
 	readonly disposable?: boolean
 	/** The CPUs the store itself is capped at, when the operator knows them, so orders can be read per core. */
 	readonly storeCpus?: number
+	/** The cgroup every bee is created under, so a machine that counts its work in a slice counts the bees too. */
+	readonly cgroupParent?: string
+}
+
+/**
+ * Why a cgroup parent cannot be used, or undefined when it can. Docker's systemd
+ * driver takes a slice's name, never a path, and an emulator's tasks have none.
+ */
+export const refuseCgroupParent = (name: string, via: Via): string | undefined => {
+	if (via === 'ecs') return '--cgroup-parent is for bees Docker starts; leave it out with --via ecs'
+	if (!/^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.slice$/.test(name))
+		return `--cgroup-parent takes a slice's name, such as lab.slice, not ${name === '' ? 'nothing' : `"${name}"`}`
+	return undefined
 }
 
 /** Why a run at a set rate cannot start, or undefined when its shape can carry one. */
@@ -146,6 +162,9 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	const rate = shape.orders
 	const refusedRate = rate === undefined ? undefined : refuseRate(shape, rate)
 	if (refusedRate !== undefined) return refusedRate
+	const refusedParent =
+		input.cgroupParent === undefined ? undefined : refuseCgroupParent(input.cgroupParent, input.via)
+	if (refusedParent !== undefined) return refusedParent
 	if (shape.browser.bees + shape.protocol.bees === 0) return 'a run needs at least one bee'
 	if (shape.seconds < 10) return 'a run needs at least 10 seconds of load to say anything'
 	const mix = MIXES[shape.mix ?? 'browse']
@@ -212,6 +231,7 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 			concurrency,
 			cpus: size.cpus,
 			memory: size.memory,
+			...(input.cgroupParent === undefined ? {} : { cgroupParent: input.cgroupParent }),
 			env: {
 				...common,
 				BEE_ID: id,
@@ -239,5 +259,6 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 		],
 		lifetime,
 		...(input.storeCpus === undefined ? {} : { storeCpus: input.storeCpus }),
+		...(input.cgroupParent === undefined ? {} : { cgroupParent: input.cgroupParent }),
 	}
 }

@@ -112,6 +112,8 @@ Flags for run and aws:
   --sku SKU               the simple product protocol bees add to carts over REST
                           (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
+  --cgroup-parent SLICE   create every bee under this systemd slice, such as lab.slice
+                          (default: $DREXBOT_CGROUP_PARENT, else Docker's own)
   --of-knee F             run only: protocol users at F (above 0, at most 1) of the
                           last good step of the newest knee swarm step measured
                           for this store; sets the bees itself, browser bees none
@@ -229,6 +231,10 @@ const planFrom = (
 	}
 	const storeCpus =
 		flag(argv, '--store-cpus') === undefined ? undefined : number(argv, '--store-cpus', 0)
+	// The flag, or the timer's environment; an empty variable is one nobody set.
+	const cgroupParent = argv.includes('--cgroup-parent')
+		? (flag(argv, '--cgroup-parent') ?? '')
+		: process.env['DREXBOT_CGROUP_PARENT'] || undefined
 	const cartPath = store.simpleProductPath ?? store.configurableProductPath
 	const cartSku = flag(argv, '--sku') ?? store.simpleProductSku
 	const via = (flag(argv, '--via') ?? 'docker') as Via
@@ -250,6 +256,7 @@ const planFrom = (
 		...(cartSku === undefined ? {} : { cartSku }),
 		disposable: process.env['MAGENTO_DISPOSABLE'] === '1',
 		...(storeCpus === undefined || storeCpus === 0 ? {} : { storeCpus }),
+		...(cgroupParent === undefined ? {} : { cgroupParent }),
 	})
 }
 

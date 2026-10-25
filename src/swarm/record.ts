@@ -44,6 +44,8 @@ export interface RunRecord {
 	readonly deploys?: DeployReport
 	/** The fraction of a measured knee the run's users were set from, when `--of-knee` set them. */
 	readonly knee?: KneeShare
+	/** The cgroup the bees ran under, when `--cgroup-parent` or `DREXBOT_CGROUP_PARENT` named one. */
+	readonly cgroupParent?: string
 }
 
 export const recordsDirectory = (results: string): string => join(results, 'swarm')
@@ -224,6 +226,7 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 		`  ${record.run}  ${record.target}`,
 		`  ${record.shapeKey}`,
 		...(record.knee === undefined ? [] : [renderShare(record.knee)]),
+		...(record.cgroupParent === undefined ? [] : [`  bees ran under: ${record.cgroupParent}`]),
 		previous === undefined
 			? '  no earlier run of this shape against this store to compare with'
 			: `  compared with ${previous.run}`,
