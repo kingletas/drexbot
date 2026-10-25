@@ -233,7 +233,7 @@ An example, with made-up figures:
   the machine stayed under 75% load at every step, so the knee is the store's
 ```
 
-**A day's load is then set as a fraction of the knee**, such as half of it for a normal day and nine tenths for a stress run, rather than as a number of users that only fits one store.
+**A day's load is set as a fraction of the knee, by hand for now:** read the knee from the step test, choose the fraction, such as half of it for a normal day and nine tenths for a stress run, and pass that many users to `swarm run` with `--protocol-users`. No flag reads the knee for you yet.
 
 ## Where bees run
 

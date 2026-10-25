@@ -125,8 +125,8 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	if (mix.browse < 1 && shape.protocol.bees > 0 && input.cartSku === undefined) {
 		return (
 			`the ${shape.mix ?? ''} mix has protocol bees add a product to a cart over REST by SKU, ` +
-			'and the store baseline holds none for a simple product; capture the baseline again with ' +
-			'drexbot baseline, or give the SKU with --sku'
+			'and the store baseline holds none; give the SKU of a simple product in stock with --sku ' +
+			"(a baseline captured again finds one only when the first category's first page lists one)"
 		)
 	}
 	if (mix.order > 0 && input.disposable !== true) {
