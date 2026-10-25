@@ -352,6 +352,18 @@ describe('the cgroup bees are created under', () => {
 	it('refuses it for an emulator, whose tasks have no cgroup of ours', () => {
 		assert.match(refusalOf(planned('lab.slice', 'ecs')), /leave it out with --via ecs/)
 	})
+
+	it('names the variable, not a flag nobody typed, when the slice came from DREXBOT_CGROUP_PARENT', () => {
+		assert.match(
+			String(refuseCgroupParent('/sys/fs/cgroup', 'docker', 'DREXBOT_CGROUP_PARENT')),
+			/^DREXBOT_CGROUP_PARENT takes a slice's name, such as lab\.slice, not "\/sys\/fs\/cgroup"$/,
+		)
+		assert.match(
+			String(refuseCgroupParent('lab.slice', 'ecs', 'DREXBOT_CGROUP_PARENT')),
+			/^DREXBOT_CGROUP_PARENT is set, .* unset it for a run with --via ecs$/,
+		)
+		assert.match(String(refuseCgroupParent('lab', 'docker')), /^--cgroup-parent takes/)
+	})
 })
 
 describe('reconciling two kinds of bee into one result', () => {

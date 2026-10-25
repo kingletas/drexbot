@@ -256,7 +256,14 @@ const planFrom = (
 		...(cartSku === undefined ? {} : { cartSku }),
 		disposable: process.env['MAGENTO_DISPOSABLE'] === '1',
 		...(storeCpus === undefined || storeCpus === 0 ? {} : { storeCpus }),
-		...(cgroupParent === undefined ? {} : { cgroupParent }),
+		...(cgroupParent === undefined
+			? {}
+			: {
+					cgroupParent,
+					cgroupParentFrom: argv.includes('--cgroup-parent')
+						? ('--cgroup-parent' as const)
+						: ('DREXBOT_CGROUP_PARENT' as const),
+				}),
 	})
 }
 
