@@ -12,6 +12,15 @@ import {
 	type Launcher,
 } from '../../swarm/conductor.js'
 import { deployReport, readLedger } from '../../swarm/deploys.js'
+import {
+	kneeRecordOf,
+	latestKnee,
+	shareOf,
+	spread,
+	usersAt,
+	writeKnee,
+	type KneeShare,
+} from '../../swarm/knee.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
@@ -87,6 +96,10 @@ Flags for run and aws:
   --sku SKU               the simple product protocol bees add to carts over REST
                           (default: the one in the store baseline)
   --store-cpus N          the CPUs the store is capped at, so orders read per core
+  --of-knee F             run only: protocol users at F (above 0, at most 1) of the
+                          last good step of the newest knee swarm step measured
+                          for this store; sets the bees itself, browser bees none
+  --knee-mix NAME         the mix that knee was measured at          (default: normal-day)
   --deploy-ledger FILE    run and reconcile only: a deploy tool's audit log (JSONL);
                           the deploys that fall within the run are recorded, with
                           their maintenance window
@@ -206,11 +219,67 @@ const planFrom = (
 	})
 }
 
-const run = async (
+/**
+ * A run's flags with its users set from the knee: `--of-knee` of the last good
+ * step of the newest knee measured for this store, on protocol bees only, as
+ * the knee was measured. Or why it cannot be set, before anything starts.
+ */
+const kneeArgv = (
 	harness: Harness,
 	options: Options,
 	argv: readonly string[],
+): { argv: string[]; share: KneeShare; users: number } | string => {
+	for (const name of ['--protocol-users', '--protocol-bees'])
+		if (argv.includes(name)) return `--of-knee sets ${name} itself; give one or the other`
+	if (number(argv, '--browser-bees', 0) > 0)
+		return '--of-knee sets protocol users only, as the knee was measured; drop --browser-bees'
+	const probe = planFrom(harness, options, [...argv, '--browser-bees', '0'], 'local')
+	if (typeof probe === 'string') return probe
+	const kneeMix = flag(argv, '--knee-mix') ?? 'normal-day'
+	const knee = latestKnee(harness.workspace.results, probe.url, kneeMix)
+	if (knee === undefined)
+		return (
+			`no knee measured for ${probe.url} at ${kneeMix}; measure one first with ` +
+			`drexbot swarm step --url ${probe.url} --store-project NAME`
+		)
+	const fraction = Number(flag(argv, '--of-knee'))
+	const users = usersAt(knee, fraction)
+	if (typeof users === 'string') return users
+	const { bees, each } = spread(users, number(argv, '--users-per-bee', 100))
+	return {
+		argv: [
+			...withoutFlags(argv, ['--browser-bees', '--of-knee', '--knee-mix']),
+			'--browser-bees',
+			'0',
+			'--protocol-bees',
+			String(bees),
+			'--protocol-users',
+			String(each),
+		],
+		share: shareOf(knee, fraction),
+		users: bees * each,
+	}
+}
+
+const run = async (
+	harness: Harness,
+	options: Options,
+	given: readonly string[],
 ): Promise<number> => {
+	let argv: readonly string[] = given
+	let knee: KneeShare | undefined
+	if (given.includes('--of-knee')) {
+		const set = kneeArgv(harness, options, given)
+		if (typeof set === 'string') {
+			process.stderr.write(`drexbot swarm: ${set}\n`)
+			return 2
+		}
+		argv = set.argv
+		knee = set.share
+		say(
+			`${knee.fraction} of the knee: ${knee.lastGood} users at its last good step, so ${set.users} users`,
+		)
+	}
 	const hosts = (flag(argv, '--on') ?? 'local').split(',').filter(name => name !== '')
 	if (flag(argv, '--via') === 'ecs' && hosts.length > 1) {
 		process.stderr.write(
@@ -271,7 +340,8 @@ const run = async (
 	const bees = runs.reduce((sum, part) => sum + part.plan.bees.length, 0)
 	say(`run ${id}: ${bees} bee(s) on ${hosts.join(' and ')}, against ${runs[0]?.plan.url ?? ''}`)
 	try {
-		const record = await conductAcross(runs, say, stop, ledger)
+		const conducted = await conductAcross(runs, say, stop, ledger)
+		const record: RunRecord = knee === undefined ? conducted : { ...conducted, knee }
 		const records = readRecords(harness.workspace.results)
 		const path = writeRecord(harness.workspace.results, record)
 		process.stdout.write(renderRecord(record, previousFor(record, records)))
@@ -357,6 +427,10 @@ const stepTest = async (
 		return 2
 	}
 	const steps: StepTaken[] = []
+	const testId = runId()
+	let target = ''
+	// A knee is kept only when the steps ended on the store's own limit, not on the machine's, a hand or a teardown.
+	let kept = true
 	let done = ''
 	const stop = { requested: false }
 	const onSignal = (): void => {
@@ -374,6 +448,7 @@ const stepTest = async (
 			}
 			if (stop.requested) {
 				done = 'stopped by hand'
+				kept = false
 				break
 			}
 			const bees = Math.ceil(next.users / perBee)
@@ -393,6 +468,7 @@ const stepTest = async (
 				process.stderr.write(`drexbot swarm: ${runPlan}\n`)
 				return 2
 			}
+			target = runPlan.url
 			const docker = new Docker(runPlan.host)
 			for (const image of new Set(runPlan.bees.map(bee => bee.image))) {
 				if (!(await docker.hasImage(image))) {
@@ -429,10 +505,12 @@ const stepTest = async (
 			say(`  ${taken.verdict}: ${taken.reason}`)
 			if (!record.teardown.verified) {
 				done = `stopped: step ${steps.length}'s teardown was not verified, so no other step starts`
+				kept = false
 				break
 			}
 			if (taken.verdict !== 'good' && taken.machineLoad >= MACHINE_BUSY) {
 				done = `stopped at ${users} users: the step went bad while the machine was at ${Math.round(taken.machineLoad * 100)}% load, so it may be the machine's knee, not the store's`
+				kept = false
 				break
 			}
 		}
@@ -446,6 +524,19 @@ const stepTest = async (
 			...(workers === undefined || workers === 0 ? {} : { workers }),
 		}),
 	)
+	const knee = kneeRecordOf(steps, done, {
+		id: testId,
+		target,
+		mix: flag(base, '--mix') ?? 'normal-day',
+	})
+	if (kept && knee?.firstBad !== undefined) {
+		const path = writeKnee(harness.workspace.results, knee)
+		process.stdout.write(
+			`  knee recorded in ${path.replace(harness.workspace.root, '.')}; swarm run --of-knee F reads it\n\n`,
+		)
+	} else {
+		process.stdout.write("  no knee recorded: the steps did not end on the store's own limit\n\n")
+	}
 	return steps.length > 0 ? 0 : 1
 }
 
