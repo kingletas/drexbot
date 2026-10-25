@@ -114,15 +114,15 @@ Flags for step, beside those for run (it sets the bee counts itself):
   --users-per-bee N       protocol users one bee drives at most      (default: 100)
   --fpm-workers N         PHP-FPM's max_children, so orders read per worker
 
-Flags for shop, beside those for run (it sets --orders itself, and --seconds to the slice):
+Flags for shop, beside those for run (it sets --orders, --per and --seconds itself):
   --night HH:MM-HH:MM     the local-time window that holds the daily deploy; it may
                           cross midnight                             (required)
   --night-orders N        orders in each slice inside the window     (default: 25)
   --day-orders N          orders in each slice outside it            (default: 5)
-  --per DURATION          the slice, such as 5m: the run's length and the
-                          timer's interval                           (default: 5m)
-  --seconds N             load for less than the whole slice, so the bees are gone
-                          before the timer's next tick     (default: the slice)
+  --per DURATION          the slice, such as 5m: the timer's interval (default: 5m)
+  --seconds N             the slice's load; a slice's orders are paced over it, and
+                          60 seconds are left to start and remove the bee before
+                          the next tick                    (default: the slice less 60)
 
 Flags for day: --url URL reports one store, otherwise every store is reported;
   --deploy-ledger FILE is the deploy tool's audit log                (required)

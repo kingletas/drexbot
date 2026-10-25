@@ -262,12 +262,12 @@ An example, with made-up figures:
 
 ```sh
 MAGENTO_DISPOSABLE=1 drexbot swarm shop --url http://localhost:8080 --env showcase \
-  --night 01:00-05:00 --sku 24-MB01 --network shop_default --mix normal-day
+  --night 01:00-05:00 --sku 24-MB01 --network shop_default
 ```
 
 - **`--night HH:MM-HH:MM` is local time and is required.** The window includes its start minute and not its end minute, and a window may cross midnight, such as `22:00-02:00`. `--night-orders` (25) and `--day-orders` (5) set the two rates, and `--per` (`5m`) the slice.
-- **It is `swarm run` with the rate filled in,** through the same code path: `--orders N --per DURATION --seconds` equal to the slice. Every other `swarm run` flag passes through. `--orders` is its own and is refused, and `--seconds` may only shorten the load, never lengthen it past the slice.
-- **A run also needs time to start its bees and remove them,** so a run that loads for the whole slice is still going when the timer's next tick comes, and systemd leaves a running service alone. `--seconds` below the slice, such as 240 of 300, leaves room, and the run then asks for the orders that many seconds call for, which its record shows.
+- **It is `swarm run` with the rate filled in,** through the same code path, with every other `swarm run` flag passed through; `--orders` is its own and is refused.
+- **A slice is not all load.** A run also needs time to start its bee and remove it, and systemd leaves a service that is still running alone when the next tick comes, so that slice would be lost. Each slice therefore loads for the slice less 60 seconds, 240 of 300 by default, and paces its whole slice's orders over that load: a night slice asks for 25 orders in 240 seconds, so the rate per slice is exactly the one set. `--seconds` shortens the load further, never past the 60 seconds' room.
 - **The timer is installed by hand, on the machine that runs the bees, and nothing here does it.** `contrib/systemd/` holds the templates: `drexbot-shop.service`, `drexbot-shop.timer` with `Persistent=false` so a slice missed while the machine was off is not caught up, and `drexbot-shop.env.example`, the flags and `MAGENTO_DISPOSABLE=1` the service reads from `~/.config/drexbot/shop.env`. Each file's header says what to edit and how to enable it.
 
 **`drexbot swarm day DATE --deploy-ledger FILE` reads the day afterwards.** It takes every run record that started on DATE in local time, for one store with `--url` or each store apart without it, and places each run against each deploy the ledger holds for that day, by the run's start and finish against the deploy's `deploy.started` and its `deploy.finished` or `deploy.failed`. A run that ends by the deploy's start is _before_ it, one that starts at or after the deploy's end is _after_ it, and any run that overlaps it is _during_ it. A deploy with no closing record counts as lasting to the end of the day. It reads the ledger with the same reader as `--deploy-ledger` on a run, so a line that does not parse is refused, with the file and line, and exit code 2.

@@ -3,7 +3,6 @@ import { describe, it } from 'node:test'
 import type { Harness, Options } from 'harness-kernel'
 import { swarmCommand } from '../src/cli/commands/swarm.js'
 import {
-	durationSeconds,
 	isNight,
 	ordersFor,
 	parseNight,
@@ -73,17 +72,6 @@ describe('the rate for a time of day', () => {
 	})
 })
 
-describe('a duration', () => {
-	it('reads seconds, minutes and hours, and nothing else', () => {
-		assert.equal(durationSeconds('90s'), 90)
-		assert.equal(durationSeconds('5m'), 300)
-		assert.equal(durationSeconds('1h'), 3_600)
-		for (const text of ['', '5', 'm', '5 m', '-5m', '0s', '5d']) {
-			assert.equal(durationSeconds(text), undefined, text)
-		}
-	})
-})
-
 const shopped = (argv: readonly string[], now: Date): ShopRun => {
 	const result = shopRun(argv, now)
 	assert.equal(typeof result, 'object', why(result))
@@ -100,7 +88,7 @@ describe('the run a slice makes', () => {
 		'showcase',
 	]
 
-	it('asks the night rate over the default five minutes, with the run as long as the slice', () => {
+	it('asks the night rate in the default five minutes, paced over the load that leaves room to start and stop', () => {
 		const slice = shopped(flags, at(2, 5))
 		assert.equal(slice.orders, 25)
 		assert.equal(slice.night, true)
@@ -112,9 +100,9 @@ describe('the run a slice makes', () => {
 			'--orders',
 			'25',
 			'--per',
-			'5m',
+			'240s',
 			'--seconds',
-			'300',
+			'240',
 		])
 	})
 
@@ -124,7 +112,7 @@ describe('the run a slice makes', () => {
 			[...flags, '--night-orders', '40', '--day-orders', '8', '--per', '10m'],
 			at(3, 0),
 		)
-		assert.deepEqual(custom.argv.slice(-6), ['--orders', '40', '--per', '10m', '--seconds', '600'])
+		assert.deepEqual(custom.argv.slice(-6), ['--orders', '40', '--per', '540s', '--seconds', '540'])
 		assert.equal(shopped([...flags, '--day-orders', '8'], at(14, 0)).orders, 8)
 	})
 
@@ -154,12 +142,12 @@ describe('the run a slice makes', () => {
 		assert.match(why(shopRun([...flags, '--orders', '9'], at(3, 0))), /drop --orders/)
 	})
 
-	it('shortens the load but not the slice when --seconds is given, and refuses one longer than the slice', () => {
-		const slice = shopped([...flags, '--seconds', '240'], at(3, 0))
-		assert.equal(slice.seconds, 240)
-		assert.deepEqual(slice.argv.slice(-6), ['--orders', '25', '--per', '5m', '--seconds', '240'])
+	it("shortens the load when --seconds is given, still asking the whole slice's orders, and refuses one that leaves no room", () => {
+		const slice = shopped([...flags, '--seconds', '180'], at(3, 0))
+		assert.equal(slice.seconds, 180)
+		assert.deepEqual(slice.argv.slice(-6), ['--orders', '25', '--per', '180s', '--seconds', '180'])
 		assert.equal(slice.argv.filter(arg => arg === '--seconds').length, 1)
-		for (const seconds of ['301', '0', 'long']) {
+		for (const seconds of ['241', '300', '9', '0', '200.5', 'long']) {
 			assert.match(
 				why(shopRun([...flags, '--seconds', seconds], at(3, 0))),
 				/--seconds is the load of one slice/,

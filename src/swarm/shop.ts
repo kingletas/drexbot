@@ -1,3 +1,5 @@
+import { parseInterval } from './orders.js'
+
 /**
  * `drexbot swarm shop`: one run at the rate the time of day calls for. A timer
  * starts it every few minutes, so the store has customers ordering steadily
@@ -51,13 +53,12 @@ export const ordersFor = (
 	rates: { readonly night: number; readonly day: number },
 ): number => (isNight(window, now) ? rates.night : rates.day)
 
-/** `30s`, `5m` or `1h` as seconds, or undefined when it is not a duration. */
-export const durationSeconds = (text: string): number | undefined => {
-	const match = /^(\d+(?:\.\d+)?)([smh])$/.exec(text)
-	if (match === null) return undefined
-	const seconds = Number(match[1]) * { s: 1, m: 60, h: 3_600 }[match[2] as 's' | 'm' | 'h']
-	return seconds > 0 ? seconds : undefined
-}
+/**
+ * Seconds each slice leaves for starting its bee before the load and removing it
+ * after, so the run is over before the timer's next tick: a tick that finds the
+ * service still running starts nothing, and that slice is lost.
+ */
+export const SLICE_ROOM = 60
 
 /** The flags `shop` reads for itself; everything else goes to `swarm run` untouched. */
 const OWN_FLAGS = ['--night', '--night-orders', '--day-orders', '--per', '--seconds'] as const
@@ -69,7 +70,7 @@ export interface ShopRun {
 	readonly night: boolean
 	readonly perSeconds: number
 	readonly per: string
-	/** The seconds of load, which are the slice unless `--seconds` made them shorter. */
+	/** The seconds of load: the slice less SLICE_ROOM, unless `--seconds` made them shorter. */
 	readonly seconds: number
 }
 
@@ -120,14 +121,18 @@ export const shopRun = (argv: readonly string[], now: Date): ShopRun | string =>
 	const perText = valueOf(argv, '--per')
 	if (typeof perText === 'object') return perText.refusal
 	const per = perText ?? DEFAULT_PER
-	const perSeconds = durationSeconds(per)
+	const perSeconds = parseInterval(per)
 	if (perSeconds === undefined) return `--per is a duration such as 5m, 90s or 1h, not "${per}"`
 
 	const secondsText = valueOf(argv, '--seconds')
 	if (typeof secondsText === 'object') return secondsText.refusal
-	const seconds = secondsText === undefined ? perSeconds : Number(secondsText)
-	if (!(seconds > 0) || seconds > perSeconds) {
-		return `--seconds is the load of one slice, more than 0 and no more than --per (${perSeconds}), not "${secondsText ?? ''}"`
+	const most = perSeconds - SLICE_ROOM
+	const seconds = secondsText === undefined ? most : Number(secondsText)
+	if (!Number.isInteger(seconds) || seconds < 10 || seconds > most) {
+		return (
+			`--seconds is the load of one slice: a whole number from 10 to ${most}, which leaves ` +
+			`${SLICE_ROOM} seconds of the ${perSeconds}-second slice to start and remove the bee, not "${secondsText ?? most}"`
+		)
 	}
 
 	const orders = ordersFor(now, window, { night, day })
@@ -138,7 +143,16 @@ export const shopRun = (argv: readonly string[], now: Date): ShopRun | string =>
 		else rest.push(arg)
 	}
 	return {
-		argv: [...rest, '--orders', String(orders), '--per', per, '--seconds', String(seconds)],
+		// The slice's orders are paced over its load, so every slice asks for exactly that many.
+		argv: [
+			...rest,
+			'--orders',
+			String(orders),
+			'--per',
+			`${seconds}s`,
+			'--seconds',
+			String(seconds),
+		],
 		orders,
 		night: isNight(window, now),
 		perSeconds,
