@@ -122,16 +122,25 @@ export interface PlanInput {
 	readonly storeCpus?: number
 	/** The cgroup every bee is created under, so a machine that counts its work in a slice counts the bees too. */
 	readonly cgroupParent?: string
+	/** Where that name came from, so a refusal names what the operator set: the flag unless said otherwise. */
+	readonly cgroupParentFrom?: '--cgroup-parent' | 'DREXBOT_CGROUP_PARENT'
 }
 
 /**
  * Why a cgroup parent cannot be used, or undefined when it can. Docker's systemd
  * driver takes a slice's name, never a path, and an emulator's tasks have none.
  */
-export const refuseCgroupParent = (name: string, via: Via): string | undefined => {
-	if (via === 'ecs') return '--cgroup-parent is for bees Docker starts; leave it out with --via ecs'
+export const refuseCgroupParent = (
+	name: string,
+	via: Via,
+	from: '--cgroup-parent' | 'DREXBOT_CGROUP_PARENT' = '--cgroup-parent',
+): string | undefined => {
+	if (via === 'ecs')
+		return from === '--cgroup-parent'
+			? '--cgroup-parent is for bees Docker starts; leave it out with --via ecs'
+			: 'DREXBOT_CGROUP_PARENT is set, and it is for bees Docker starts; unset it for a run with --via ecs'
 	if (!/^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.slice$/.test(name))
-		return `--cgroup-parent takes a slice's name, such as lab.slice, not ${name === '' ? 'nothing' : `"${name}"`}`
+		return `${from} takes a slice's name, such as lab.slice, not ${name === '' ? 'nothing' : `"${name}"`}`
 	return undefined
 }
 
@@ -163,7 +172,9 @@ export const planRun = (input: PlanInput): RunPlan | string => {
 	const refusedRate = rate === undefined ? undefined : refuseRate(shape, rate)
 	if (refusedRate !== undefined) return refusedRate
 	const refusedParent =
-		input.cgroupParent === undefined ? undefined : refuseCgroupParent(input.cgroupParent, input.via)
+		input.cgroupParent === undefined
+			? undefined
+			: refuseCgroupParent(input.cgroupParent, input.via, input.cgroupParentFrom)
 	if (refusedParent !== undefined) return refusedParent
 	if (shape.browser.bees + shape.protocol.bees === 0) return 'a run needs at least one bee'
 	if (shape.seconds < 10) return 'a run needs at least 10 seconds of load to say anything'
