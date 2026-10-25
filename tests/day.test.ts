@@ -149,15 +149,17 @@ describe('the runs of a day with one deploy', () => {
 		assert.equal(store?.wholeDay, undefined)
 	})
 
-	it('places a run that overlaps the deploy during it, whichever end it overlaps', () => {
+	it('places a run that overlaps the deploy during it, whichever end it overlaps, and counts the far ones in no band', () => {
 		assert.deepEqual(
 			bands?.map(band => [band.band, band.runs]),
 			[
 				['before', 2],
 				['during', 3],
-				['after', 2],
+				['after', 0],
 			],
 		)
+		// The 12:00 run and the one at the day's end are hours after the deploy, past its two hours either side.
+		assert.equal(store?.deploys[0]?.outside, 2)
 	})
 
 	it('puts a run that ended as the deploy began before it, and one that began as it ended after it', () => {
@@ -240,8 +242,8 @@ describe('a day with two deploys', () => {
 		assert.deepEqual(
 			deploys?.map(deploy => deploy.bands.map(band => band.runs)),
 			[
-				[2, 3, 2],
-				[5, 1, 1],
+				[2, 3, 0],
+				[0, 1, 0],
 			],
 		)
 	})
@@ -351,5 +353,63 @@ describe('swarm day', () => {
 		const { code } = await swarmDay(['2026-12-25', '--deploy-ledger', ledger])
 		assert.equal(code, 1)
 		assert.equal(existsSync(dayPath(results, '2026-12-25')), false)
+	})
+})
+
+describe('before and after a deploy, read like with like', () => {
+	// A night window of 25 orders a slice from 01:00 to 05:00, a clean deploy at 03:00, and the day's trickle
+	// of 5 a slice from 05:00 to midnight: before and after must be two night hours each, and read the same.
+	// 2 November, because the fixtures' 1 November is the night the clocks go back an hour.
+	const NIGHT = '2026-11-02'
+	const on = (hour: number, minute: number): Date => at(hour, minute, 2)
+	const NIGHT_RELEASE = '20261101_0300000004_showcase'
+	const clean = [
+		entry(on(3, 0), 'deploy.started', NIGHT_RELEASE),
+		entry(on(3, 6), 'deploy.finished', NIGHT_RELEASE, { outcome: 'success' }),
+	].join('\n')
+	const slices: RunRecord[] = []
+	for (let minute = 60; minute < 24 * 60; minute += 5) {
+		const start = on(Math.floor(minute / 60), minute % 60)
+		const end = new Date(start.getTime() + 4 * 60_000)
+		const night = minute < 5 * 60
+		slices.push(
+			made(start, end, {
+				asked: night ? 25 : 5,
+				placed: night ? 25 : 5,
+				failures: 1,
+				checkoutP95: 400,
+			}),
+		)
+	}
+
+	it('gives before and after the same span, so a clean deploy does not read worse after', () => {
+		const report = dayReport(NIGHT, slices, parseLedger(clean, 'l'), 'l', STORE) as DayReport
+		const [before, , after] = report.stores[0]?.deploys[0]?.bands ?? []
+		// Before is 01:00 to 03:00; after is 03:06 to 05:06, which takes in the 05:00 slice at the day rate.
+		assert.equal(before?.runs, 24)
+		assert.equal(after?.runs, 23)
+		assert.equal(before?.asked, 24 * 25)
+		assert.equal(after?.asked, 22 * 25 + 5)
+		// Per run the two read the same: the long day of trickle after the night is in no band.
+		assert.equal(before?.failures, 24)
+		assert.equal(after?.failures, 23)
+		assert.equal(before?.highestCheckoutP95, after?.highestCheckoutP95)
+		assert.ok((report.stores[0]?.deploys[0]?.outside ?? 0) > 200)
+		assert.match(renderDay(report), /before and after are each the 2h either side of a deploy/)
+	})
+
+	it('reaches as far as --around says', () => {
+		const report = dayReport(
+			NIGHT,
+			slices,
+			parseLedger(clean, 'l'),
+			'l',
+			STORE,
+			30 * 60,
+		) as DayReport
+		const [before, , after] = report.stores[0]?.deploys[0]?.bands ?? []
+		assert.equal(before?.runs, 6)
+		assert.equal(after?.runs, 5)
+		assert.match(renderDay(report), /each the 30m either side/)
 	})
 })

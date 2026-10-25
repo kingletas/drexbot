@@ -126,6 +126,9 @@ export const shopRun = (argv: readonly string[], now: Date): ShopRun | string =>
 
 	const secondsText = valueOf(argv, '--seconds')
 	if (typeof secondsText === 'object') return secondsText.refusal
+	if (perSeconds < SLICE_ROOM + 10) {
+		return `--per must be at least ${SLICE_ROOM + 10}s: each slice keeps ${SLICE_ROOM} seconds to start and remove its bee, and loads for 10 or more, not "${per}"`
+	}
 	const most = perSeconds - SLICE_ROOM
 	const seconds = secondsText === undefined ? most : Number(secondsText)
 	if (!Number.isInteger(seconds) || seconds < 10 || seconds > most) {

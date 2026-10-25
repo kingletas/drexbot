@@ -222,10 +222,14 @@ describe('planning a run at a set rate', () => {
 		assert.match(refusalOf(planned(atRate({ mix: 'normal-day' }))), /--orders.*--mix/)
 	})
 
-	it('refuses a run too short to ask for one order, and says how long it needs', () => {
-		const said = refusalOf(planned(atRate({ seconds: 10, orders: { count: 5, perSeconds: 300 } })))
-		assert.match(said, /asks for no order/)
-		assert.match(said, /60 seconds/)
+	it('refuses a run that is not a whole number of intervals, so asked and started agree, and says the length to give', () => {
+		const short = refusalOf(planned(atRate({ seconds: 10, orders: { count: 5, perSeconds: 300 } })))
+		assert.match(short, /lasts a whole number of intervals/)
+		assert.match(short, /--seconds 10 is not a multiple of 5m, so give --seconds 300/)
+		const between = refusalOf(
+			planned(atRate({ seconds: 70, orders: { count: 5, perSeconds: 60 } })),
+		)
+		assert.match(between, /--seconds 70 is not a multiple of 1m, so give --seconds 60/)
 	})
 
 	it('still refuses a run under 10 seconds', () => {

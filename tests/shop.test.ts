@@ -166,6 +166,10 @@ describe('the run a slice makes', () => {
 			/--day-orders needs a whole number/,
 		)
 		assert.match(why(shopRun([...flags, '--per', 'often'], at(3, 0))), /--per is a duration/)
+		assert.match(
+			why(shopRun([...flags, '--per', '60s'], at(3, 0))),
+			/--per must be at least 70s: each slice keeps 60 seconds to start and remove its bee/,
+		)
 	})
 })
 

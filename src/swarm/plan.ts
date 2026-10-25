@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { StoreBaseline } from '../magento/baseline.js'
 import type { BeeKind } from '../bee/lines.js'
 import { MIXES, type MixName } from '../bee/mix.js'
-import { intervalText, orderUsers, ordersAskedFor } from './orders.js'
+import { intervalText, orderUsers } from './orders.js'
 import type { BeeHost } from './settings.js'
 
 /**
@@ -130,10 +130,11 @@ const refuseRate = (shape: Shape, rate: NonNullable<Shape['orders']>): string | 
 	if (shape.protocol.bees !== 1) {
 		return `--orders places its orders from exactly one protocol bee, not ${shape.protocol.bees}; use --protocol-bees 1 (a rate shared out between bees would drift)`
 	}
-	if (shape.seconds >= 10 && ordersAskedFor(rate, shape.seconds) < 1) {
+	if (shape.seconds >= 10 && shape.seconds % rate.perSeconds !== 0) {
 		return (
-			`${rate.count} orders every ${intervalText(rate.perSeconds)} asks for no order in ${shape.seconds} seconds; ` +
-			`a run needs at least ${Math.ceil(rate.perSeconds / rate.count)} seconds to be asked for one`
+			`a run at a set rate lasts a whole number of intervals, so the orders it asks for are the orders it starts; ` +
+			`--seconds ${shape.seconds} is not a multiple of ${intervalText(rate.perSeconds)}, so give --seconds ` +
+			`${Math.max(1, Math.round(shape.seconds / rate.perSeconds)) * rate.perSeconds}, or a --per that divides it`
 		)
 	}
 	return undefined

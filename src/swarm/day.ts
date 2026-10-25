@@ -1,13 +1,20 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deployWindows, type LedgerRecord } from './deploys.js'
+import { intervalText, ordersAskedFor } from './orders.js'
 import { checkoutP95Of, ordersOf, recordsDirectory, type RunRecord } from './record.js'
 
 /**
  * A day of shop runs, each placed before, during or after the day's deploys.
- * A run's record keeps percentiles and not histograms, so a band's checkout
- * p95 is the highest of its runs' p95s: an upper reading, never an average.
+ * Before and after are the same length, a span either side of the deploy, so
+ * the two compare like with like: the rest of the day, at another rate and
+ * with more runs, would read worse after any deploy. A run's record keeps
+ * percentiles and not histograms, so a band's checkout p95 is the highest of
+ * its runs' p95s: an upper reading, never an average.
  */
+
+/** Seconds either side of a deploy that its before and after bands cover, unless `--around` says. */
+export const DEFAULT_AROUND_SECONDS = 2 * 3600
 
 export type BandName = 'before' | 'during' | 'after' | 'whole day'
 
@@ -32,6 +39,8 @@ export interface DayDeploy {
 	/** Absent when the ledger never closes the deploy, which then counts as lasting to the day's end. */
 	readonly endedAt?: string
 	readonly bands: readonly BandTotals[]
+	/** The day's runs outside the deploy and the span either side of it, in no band. */
+	readonly outside: number
 }
 
 export interface DayStore {
@@ -47,6 +56,8 @@ export interface DayReport {
 	readonly ledger: string
 	/** The deploys the ledger holds for the day, all stores together. */
 	readonly deploys: number
+	/** The seconds either side of each deploy that its before and after bands cover. */
+	readonly aroundSeconds: number
 	readonly stores: readonly DayStore[]
 }
 
@@ -71,7 +82,7 @@ const sameStore = (a: string, b: string): boolean => a.replace(/\/+$/, '') === b
 export const ordersAsked = (record: RunRecord): number | undefined => {
 	const orders = record.shape.orders
 	if (orders === undefined || !(orders.perSeconds > 0)) return undefined
-	return Math.floor((orders.count * record.shape.seconds) / orders.perSeconds)
+	return ordersAskedFor(orders, record.shape.seconds)
 }
 
 const totals = (band: BandName, runs: readonly RunRecord[]): BandTotals => {
@@ -94,10 +105,21 @@ const totals = (band: BandName, runs: readonly RunRecord[]): BandTotals => {
 	}
 }
 
-/** A run is before a deploy when it ended by the deploy's start, after it when it began at or after the deploy's end, and during it otherwise. */
-const placeAgainst = (run: RunRecord, from: number, to: number): Exclude<BandName, 'whole day'> => {
-	if (Date.parse(run.finishedAt) <= from) return 'before'
-	if (Date.parse(run.startedAt) >= to) return 'after'
+/**
+ * A run is during a deploy when it overlaps it; before it when it ended by the
+ * deploy's start and began within `around` of it; after it when it began at or
+ * after the deploy's end and ended within `around` of it; otherwise in no band.
+ */
+const placeAgainst = (
+	run: RunRecord,
+	from: number,
+	to: number,
+	around: number,
+): Exclude<BandName, 'whole day'> | undefined => {
+	const started = Date.parse(run.startedAt)
+	const finished = Date.parse(run.finishedAt)
+	if (finished <= from) return started >= from - around ? 'before' : undefined
+	if (started >= to) return finished <= to + around ? 'after' : undefined
 	return 'during'
 }
 
@@ -108,7 +130,9 @@ export const dayReport = (
 	ledger: readonly LedgerRecord[],
 	ledgerFile: string,
 	url?: string,
+	aroundSeconds: number = DEFAULT_AROUND_SECONDS,
 ): DayReport | string => {
+	const around = aroundSeconds * 1000
 	const bounds = dayBounds(date)
 	if (typeof bounds === 'string') return bounds
 	const { from, to } = bounds
@@ -145,14 +169,15 @@ export const dayReport = (
 					bands: (['before', 'during', 'after'] as const).map(band =>
 						totals(
 							band,
-							runs.filter(run => placeAgainst(run, start, end) === band),
+							runs.filter(run => placeAgainst(run, start, end, around) === band),
 						),
 					),
+					outside: runs.filter(run => placeAgainst(run, start, end, around) === undefined).length,
 				}
 			}),
 		}
 	})
-	return { date, ledger: ledgerFile, deploys: deploys.length, stores }
+	return { date, ledger: ledgerFile, deploys: deploys.length, aroundSeconds, stores }
 }
 
 const cell = (value: number | null): string => (value === null ? '-' : String(value))
@@ -205,11 +230,13 @@ export const renderDay = (report: DayReport): string => {
 				`    deploy ${deploy.release} on ${deploy.env}: ${deploy.outcome}, ${deploy.startedAt} to ` +
 					(deploy.endedAt ?? 'no end recorded, so taken as the end of the day'),
 				...table(deploy.bands),
+				`      ${deploy.outside} run(s) of the day fall outside these bands`,
 			)
 		}
 	}
 	out.push(
 		'',
+		`  before and after are each the ${intervalText(report.aroundSeconds)} either side of a deploy, so they compare like with like;`,
 		'  orders asked is what each run was given (--orders over --per), "-" when a record has none;',
 		"  checkout p95 is the highest of the runs' p95s, since records keep percentiles and not histograms",
 		'',

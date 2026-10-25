@@ -16,7 +16,7 @@ import { deployReport, readLedger } from '../../swarm/deploys.js'
 import { Docker, RUN_LABEL } from '../../swarm/docker.js'
 import { ECS_CLUSTER_LABEL, CLUSTER, emulatorRefusal } from '../../swarm/ecs.js'
 import { measure } from '../../swarm/measure.js'
-import { ordersFrom } from '../../swarm/orders.js'
+import { ordersFrom, parseInterval } from '../../swarm/orders.js'
 import {
 	planRun,
 	runId,
@@ -125,7 +125,8 @@ Flags for shop, beside those for run (it sets --orders, --per and --seconds itse
                           the next tick                    (default: the slice less 60)
 
 Flags for day: --url URL reports one store, otherwise every store is reported;
-  --deploy-ledger FILE is the deploy tool's audit log                (required)
+  --deploy-ledger FILE is the deploy tool's audit log                (required);
+  --around DURATION is how far before and after each deploy its bands reach (default: 2h)
 `
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
@@ -341,12 +342,21 @@ const day = (harness: Harness, options: Options, argv: readonly string[]): numbe
 			process.stderr.write('usage: drexbot swarm day DATE --deploy-ledger FILE [--url URL]\n')
 			return 2
 		}
+		const aroundText = flag(argv, '--around') ?? '2h'
+		const around = parseInterval(aroundText)
+		if (around === undefined) {
+			process.stderr.write(
+				`drexbot swarm: --around is a duration such as 30m or 2h, not "${aroundText}"\n`,
+			)
+			return 2
+		}
 		report = dayReport(
 			date,
 			readRecords(harness.workspace.results),
 			readLedger(ledger),
 			ledger,
 			options.url ?? flag(argv, '--url'),
+			around,
 		)
 	} catch (cause) {
 		process.stderr.write(

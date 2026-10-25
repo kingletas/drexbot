@@ -270,7 +270,7 @@ MAGENTO_DISPOSABLE=1 drexbot swarm shop --url http://localhost:8080 --env showca
 - **A slice is not all load.** A run also needs time to start its bee and remove it, and systemd leaves a service that is still running alone when the next tick comes, so that slice would be lost. Each slice therefore loads for the slice less 60 seconds, 240 of 300 by default, and paces its whole slice's orders over that load: a night slice asks for 25 orders in 240 seconds, so the rate per slice is exactly the one set. `--seconds` shortens the load further, never past the 60 seconds' room.
 - **The timer is installed by hand, on the machine that runs the bees, and nothing here does it.** `contrib/systemd/` holds the templates: `drexbot-shop.service`, `drexbot-shop.timer` with `Persistent=false` so a slice missed while the machine was off is not caught up, and `drexbot-shop.env.example`, the flags and `MAGENTO_DISPOSABLE=1` the service reads from `~/.config/drexbot/shop.env`. Each file's header says what to edit and how to enable it.
 
-**`drexbot swarm day DATE --deploy-ledger FILE` reads the day afterwards.** It takes every run record that started on DATE in local time, for one store with `--url` or each store apart without it, and places each run against each deploy the ledger holds for that day, by the run's start and finish against the deploy's `deploy.started` and its `deploy.finished` or `deploy.failed`. A run that ends by the deploy's start is _before_ it, one that starts at or after the deploy's end is _after_ it, and any run that overlaps it is _during_ it. A deploy with no closing record counts as lasting to the end of the day. It reads the ledger with the same reader as `--deploy-ledger` on a run, so a line that does not parse is refused, with the file and line, and exit code 2.
+**`drexbot swarm day DATE --deploy-ledger FILE` reads the day afterwards.** It takes every run record that started on DATE in local time, for one store with `--url` or each store apart without it, and places each run against each deploy the ledger holds for that day, by the run's start and finish against the deploy's `deploy.started` and its `deploy.finished` or `deploy.failed`. Any run that overlaps the deploy is _during_ it. _Before_ and _after_ are the same length, two hours either side of the deploy unless `--around` says otherwise: a run that ends by the deploy's start and began within that span is _before_, and one that starts at or after the deploy's end and ended within it is _after_. The rest of the day is in no band, and the report says how many runs that is, because the day after a night deploy is longer and at another rate, and would read worse after any deploy. A deploy with no closing record counts as lasting to the end of the day. It reads the ledger with the same reader as `--deploy-ledger` on a run, so a line that does not parse is refused, with the file and line, and exit code 2.
 
 An example, with made-up figures:
 
@@ -280,10 +280,11 @@ An example, with made-up figures:
   http://localhost:8080: 288 run(s)
 
     deploy 20261101_0210000001_showcase on showcase: success, 2026-11-01T02:10:00Z to 2026-11-01T02:16:00Z
-      band    runs  orders asked  orders placed  failed requests  checkout p95, highest run's
+              runs  orders asked  orders placed  failed requests  checkout p95, highest run's
       before  24    600           598            12               480 ms
       during  2     50            31             140              4000 ms
-      after   262   1330          1325           33               510 ms
+      after   23    575           571            10               510 ms
+      239 run(s) of the day fall outside these bands
 ```
 
 - **Orders asked is what each run was given,** `count * seconds / per` rounded down, from the run's shape. A record made without a rate has none, and shows `-`; a band where only some runs say shows the sum of those and how many.
