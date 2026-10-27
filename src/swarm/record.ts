@@ -1,12 +1,19 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CHECKOUT_STAGES, JOURNEY_PREFIX, isJourneyStage, type BeeKind } from '../bee/lines.js'
+import {
+	CHECKOUT_STAGES,
+	JOURNEY_PREFIX,
+	isJourneyStage,
+	type BeeKind,
+	type BeeLine,
+} from '../bee/lines.js'
 import { MIXES, type Journey } from '../bee/mix.js'
 import { renderDeploys, type DeployReport } from './deploys.js'
 import { renderShare, type KneeShare } from './knee.js'
 import type { KindResult, Percentiles, RunResult } from './reconcile.js'
 import { intervalText, ordersAskedFor, type Orders } from './orders.js'
 import type { Shape, Via } from './plan.js'
+import { renderTimeline, type Timeline } from './timeline.js'
 
 /**
  * One file per run, written so the next run of the same shape can be compared
@@ -46,6 +53,8 @@ export interface RunRecord {
 	readonly knee?: KneeShare
 	/** The cgroup the bees ran under, when `--cgroup-parent` or `DREXBOT_CGROUP_PARENT` named one. */
 	readonly cgroupParent?: string
+	/** The load placed in time; absent on records written before bees were timed, or when no bee wrote a window. */
+	readonly timeline?: Timeline
 }
 
 export const recordsDirectory = (results: string): string => join(results, 'swarm')
@@ -55,6 +64,18 @@ export const writeRecord = (results: string, record: RunRecord): string => {
 	mkdirSync(directory, { recursive: true })
 	const path = join(directory, `${record.run}.json`)
 	writeFileSync(path, `${JSON.stringify(record, null, '\t')}\n`)
+	return path
+}
+
+/**
+ * Every line the bees wrote, kept beside the record as they wrote them, so a
+ * question the record does not answer can still be asked of the run.
+ */
+export const writeBeeLines = (results: string, run: string, lines: readonly BeeLine[]): string => {
+	const directory = recordsDirectory(results)
+	mkdirSync(directory, { recursive: true })
+	const path = join(directory, `${run}.bee-lines.txt`)
+	writeFileSync(path, lines.map(line => `${JSON.stringify(line)}\n`).join(''))
 	return path
 }
 
@@ -260,6 +281,7 @@ export const renderRecord = (record: RunRecord, previous?: RunRecord): string =>
 		'',
 		`  the store, under both: ${combined.count} requests, ${combined.failures} failed (${(combined.errorRate * 100).toFixed(2)}%)`,
 		line('time to first byte', combined.ttfb, previous?.result.combined.ttfb),
+		...(record.timeline === undefined ? [] : ['', ...renderTimeline(record.timeline)]),
 		...(record.deploys === undefined
 			? []
 			: renderDeploys(record.deploys, record.result.protocol !== undefined)),

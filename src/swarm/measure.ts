@@ -139,7 +139,8 @@ export const measure = async (
 			run: `${id}-${bee}${concurrency}`,
 		})
 		if (typeof plan === 'string') throw new Error(plan)
-		return conduct(plan, docker, dockerLauncher(docker, network), () => undefined)
+		const { record } = await conduct(plan, docker, dockerLauncher(docker, network), () => undefined)
+		return record
 	}
 
 	const results: Step[] = []
