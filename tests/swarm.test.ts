@@ -30,7 +30,16 @@ import {
 	type Shape,
 } from '../src/swarm/plan.js'
 import { reconcile } from '../src/swarm/reconcile.js'
-import { previousFor, renderRecord, RECORD_TAG, type RunRecord } from '../src/swarm/record.js'
+import {
+	previousFor,
+	readRecords,
+	renderRecord,
+	RECORD_TAG,
+	writeBeeLines,
+	writeRecord,
+	type RunRecord,
+} from '../src/swarm/record.js'
+import { renderTimeline, timelineOf } from '../src/swarm/timeline.js'
 import {
 	allowedTargets,
 	beeHosts,
@@ -583,7 +592,7 @@ describe('conducting a run', () => {
 			start: (run, bee) => docker.start(run, bee),
 			cleanup: () => Promise.resolve(),
 		}
-		const record = await conduct(plan(), docker as unknown as Docker, launcher, () => undefined)
+		const { record } = await conduct(plan(), docker as unknown as Docker, launcher, () => undefined)
 		assert.equal(docker.containers.size, 0)
 		assert.deepEqual(record.teardown, { removed: 2, leftover: 0, verified: true })
 	})
@@ -645,7 +654,7 @@ describe('one run across several hosts', () => {
 			start: (run, bee) => docker.start(run, bee),
 			cleanup: () => Promise.resolve(),
 		})
-		const record = await conductAcross(
+		const { record } = await conductAcross(
 			[
 				{
 					plan: across({ prefix: 'here', name: 'here' }),
@@ -713,5 +722,121 @@ describe('a host line that names its own route to the store', () => {
 		assert.equal(local?.forward, '8080=web:80')
 		assert.equal(bees?.forward, '8080=198.51.100.7:18080')
 		assert.equal(bees?.network, undefined)
+	})
+})
+
+describe("a run's timeline", () => {
+	const START = Date.UTC(2026, 0, 1)
+	const at = (seconds: number): string => new Date(START + seconds * 1_000).toISOString()
+	/** A protocol user's counts for the window ending `seconds` into the hour. */
+	const tick = (bee: string, seconds: number, ms: number[], failures = 0): BeeLine =>
+		({
+			...window('protocol', bee, 'home', ms, failures),
+			event: 'tick',
+			at: at(seconds),
+		}) as BeeLine
+	const browserWindow = (seconds: number, ms: number[], failures = 0): BeeLine => ({
+		...window('browser', 'b', 'home', ms, failures),
+		at: at(seconds),
+	})
+
+	it('places a target interrupted part-way, from the first failing window to the last', () => {
+		const lines = [
+			tick('p', 10, [20, 20]),
+			tick('p', 20, [20, 20]),
+			tick('p', 30, [20, 20], 2),
+			tick('p', 40, [20], 1),
+			tick('p', 50, [20, 20]),
+			browserWindow(27, [300], 1),
+			browserWindow(37, [300]),
+		]
+		const timeline = timelineOf(lines)
+		assert.ok(timeline !== undefined)
+		assert.deepEqual(timeline.failing, [{ from: at(20), to: at(40), failures: 4 }])
+		assert.deepEqual(timeline.quiet, [])
+		assert.deepEqual(
+			timeline.windows.map(w => [w.at, w.count, w.failures]),
+			[
+				[at(10), 2, 0],
+				[at(20), 2, 0],
+				[at(30), 3, 3],
+				[at(40), 2, 1],
+				[at(50), 2, 0],
+			],
+		)
+		const text = renderTimeline(timeline).join('\n')
+		assert.match(text, /10s windows from 00:00:00 to 00:00:50 UTC/)
+		assert.match(text, /failures from 00:00:20 to 00:00:40: 4 failed/)
+	})
+
+	it('shows a steady run with no failure and no stretch where nothing completed', () => {
+		const timeline = timelineOf([10, 20, 30].map(seconds => tick('p', seconds, [20, 20])))
+		assert.ok(timeline !== undefined)
+		assert.deepEqual(timeline.failing, [])
+		assert.deepEqual(timeline.quiet, [])
+		assert.match(renderTimeline(timeline).join('\n'), /no window had a failure/)
+	})
+
+	it('names a stretch where no request completed at all', () => {
+		const timeline = timelineOf([tick('p', 10, [20]), tick('p', 40, [20])])
+		assert.ok(timeline !== undefined)
+		assert.deepEqual(timeline.quiet, [{ from: at(10), to: at(30), failures: 0 }])
+		assert.match(
+			renderTimeline(timeline).join('\n'),
+			/no request completed from 00:00:10 to 00:00:30/,
+		)
+	})
+
+	it("adds users' ticks for one window, and leaves journeys and the closing totals out", () => {
+		const closing = { ...window('protocol', 'p', 'home', [20, 20, 20, 20, 20]), at: at(20) }
+		const journey = tick('p', 10, [900])
+		const timeline = timelineOf([
+			tick('p', 10, [20]),
+			tick('q', 10, [20, 20]),
+			{ ...journey, stage: 'journey:order' } as BeeLine,
+			closing,
+		])
+		assert.deepEqual(
+			timeline?.windows.map(w => [w.at, w.count]),
+			[[at(10), 3]],
+		)
+	})
+
+	it('says when protocol bees wrote no ticks, and has nothing to place without any', () => {
+		const timeline = timelineOf([browserWindow(10, [300]), window('protocol', 'p', 'home', [20])])
+		assert.ok(timeline !== undefined)
+		assert.equal(timeline.protocolMissing, true)
+		assert.match(renderTimeline(timeline).join('\n'), /protocol bees wrote no timeline/)
+		assert.equal(timelineOf([window('protocol', 'p', 'home', [20])]), undefined)
+	})
+
+	it('adds ticks into no total, which the closing windows already hold', () => {
+		const closing = window('protocol', 'p', 'home', [20, 20, 20])
+		assert.deepEqual(
+			reconcile([closing, tick('p', 10, [20, 20]), tick('p', 20, [20])], 60),
+			reconcile([closing], 60),
+		)
+	})
+
+	it('is printed in the record', () => {
+		const timeline = timelineOf([tick('p', 10, [20]), tick('p', 20, [20], 1)])
+		const text = renderRecord(
+			recordOf('t', '2026-01-01', timeline === undefined ? {} : { timeline }),
+		)
+		assert.match(text, /timeline, 10s windows/)
+		assert.match(text, /failures from 00:00:10 to 00:00:20: 1 failed/)
+	})
+
+	it("keeps the bees' lines beside the record, where reading the records does not take them for one", () => {
+		const results = mkdtempSync(join(tmpdir(), 'drexbot-timeline-'))
+		const lines = [tick('p', 10, [20]), finished('protocol', 'p')]
+		writeRecord(results, recordOf('kept', '2026-01-01'))
+		const path = writeBeeLines(results, 'kept', lines)
+		assert.match(path, /kept\.bee-lines\.txt$/)
+		assert.deepEqual(beeLinesIn(readFileSync(path, 'utf8')), lines)
+		assert.deepEqual(
+			readRecords(results).map(r => r.run),
+			['kept'],
+		)
 	})
 })

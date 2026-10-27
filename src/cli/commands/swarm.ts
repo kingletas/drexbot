@@ -40,6 +40,7 @@ import {
 } from '../../swarm/plan.js'
 import { reconcile } from '../../swarm/reconcile.js'
 import { shopRun } from '../../swarm/shop.js'
+import { timelineOf } from '../../swarm/timeline.js'
 import { isMixName, MIXES, type MixName } from '../../bee/mix.js'
 import {
 	checkoutP95Of,
@@ -48,6 +49,7 @@ import {
 	readRecords,
 	recordsDirectory,
 	renderRecord,
+	writeBeeLines,
 	writeRecord,
 	RECORD_TAG,
 	type RunRecord,
@@ -386,9 +388,10 @@ const run = async (
 	say(`run ${id}: ${bees} bee(s) on ${hosts.join(' and ')}, against ${runs[0]?.plan.url ?? ''}`)
 	try {
 		const conducted = await conductAcross(runs, say, stop, ledger)
-		const record: RunRecord = knee === undefined ? conducted : { ...conducted, knee }
+		const record: RunRecord = knee === undefined ? conducted.record : { ...conducted.record, knee }
 		const records = readRecords(harness.workspace.results)
 		const path = writeRecord(harness.workspace.results, record)
+		writeBeeLines(harness.workspace.results, record.run, conducted.lines)
 		process.stdout.write(renderRecord(record, previousFor(record, records)))
 		process.stdout.write(`  recorded in ${path.replace(harness.workspace.root, '.')}\n\n`)
 		return record.teardown.verified &&
@@ -564,9 +567,14 @@ const stepTest = async (
 			const launcher = dockerLauncher(docker, flag(argv, '--network') ?? runPlan.host.network)
 			say(`step ${steps.length + 1}: ${users} users on ${bees} protocol bee(s)`)
 			const sampler = await sampleStore(storeDocker, project)
-			const record = await conductAcross([{ plan: runPlan, docker, launcher }], say, stop)
+			const { record, lines } = await conductAcross(
+				[{ plan: runPlan, docker, launcher }],
+				say,
+				stop,
+			)
 			const load = await sampler.stop()
 			writeRecord(harness.workspace.results, record)
+			writeBeeLines(harness.workspace.results, record.run, lines)
 			const outcome: StepOutcome = {
 				users,
 				checkoutP95: checkoutP95Of(record),
@@ -688,6 +696,7 @@ const reconcileDirectory = (harness: Harness, argv: readonly string[]): number =
 	const ledger = ledgerFlag(argv)
 	const startedAt = lines[0]?.at ?? new Date().toISOString()
 	const finishedAt = lines.at(-1)?.at ?? new Date().toISOString()
+	const timeline = timelineOf(lines)
 	const record: RunRecord = {
 		drexbot: RECORD_TAG,
 		run: plan.run,
@@ -706,6 +715,7 @@ const reconcileDirectory = (harness: Harness, argv: readonly string[]): number =
 		...(ledger === undefined
 			? {}
 			: { deploys: deployReport(ledger, { startedAt, finishedAt }, lines) }),
+		...(timeline === undefined ? {} : { timeline }),
 	}
 	const records = readRecords(harness.workspace.results)
 	writeRecord(harness.workspace.results, record)

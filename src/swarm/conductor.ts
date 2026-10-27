@@ -6,6 +6,7 @@ import { shapeKey, type BeeOrder, type RunPlan } from './plan.js'
 import { reconcile } from './reconcile.js'
 import type { RunRecord, Teardown } from './record.js'
 import { RECORD_TAG } from './record.js'
+import { timelineOf } from './timeline.js'
 
 /**
  * Runs a plan from start to verified teardown. Teardown sits in a `finally`,
@@ -103,6 +104,12 @@ const conductHost = async (
 	return { host: plan.host.name, startedAt, lines, teardown, caveats, seconds }
 }
 
+/** A finished run: its record, and every line its bees wrote, to keep beside it. */
+export interface Conducted {
+	readonly record: RunRecord
+	readonly lines: readonly BeeLine[]
+}
+
 /**
  * Runs one plan per host at once, as one run; if any host fails, the others are stopped and every host still tears down.
  */
@@ -111,7 +118,7 @@ export const conductAcross = async (
 	say: Progress,
 	stop: { requested: boolean } = { requested: false },
 	deployLedger?: string,
-): Promise<RunRecord> => {
+): Promise<Conducted> => {
 	const first = runs[0]
 	if (first === undefined) throw new Error('a run needs at least one host')
 	say(`running for ${first.plan.shape.seconds}s of load`)
@@ -154,7 +161,8 @@ export const conductAcross = async (
 	const host = outcomes.map(outcome => outcome.host).join('+')
 	const startedAt = outcomes.map(outcome => outcome.startedAt).sort()[0] ?? new Date().toISOString()
 	const finishedAt = new Date().toISOString()
-	return {
+	const timeline = timelineOf(lines)
+	const record: RunRecord = {
 		drexbot: RECORD_TAG,
 		run: first.plan.run,
 		startedAt,
@@ -178,7 +186,9 @@ export const conductAcross = async (
 		...(deployLedger === undefined
 			? {}
 			: { deploys: deployReport(deployLedger, { startedAt, finishedAt }, lines) }),
+		...(timeline === undefined ? {} : { timeline }),
 	}
+	return { record, lines }
 }
 
 export const conduct = async (
@@ -187,7 +197,7 @@ export const conduct = async (
 	launcher: Launcher,
 	say: Progress,
 	stop: { requested: boolean } = { requested: false },
-): Promise<RunRecord> => conductAcross([{ plan, docker, launcher }], say, stop)
+): Promise<Conducted> => conductAcross([{ plan, docker, launcher }], say, stop)
 
 /** Removes every container of the run, by what was started and by label, then looks again. */
 export const tearDown = async (

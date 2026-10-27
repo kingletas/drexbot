@@ -176,16 +176,71 @@ export const options = {
 	summaryTrendStats: ['avg'],
 }
 
+// The timeline. Each k6 user has a runtime of its own, so these are one user's counts for the window in hand,
+// written as `tick` lines when a later window begins. Journeys are left out: the timeline places requests.
+// A user's last window is never written, because k6 stops a user without warning; the closing totals hold it.
+const WINDOW_MS = 1000 * Math.max(1, Math.floor(Number(__ENV.BEE_WINDOW_SECONDS || 10)))
+let tickWindow
+let ticks = new Map()
+
+const writeTicks = () => {
+	if (tickWindow === undefined) return
+	const at = new Date((tickWindow + 1) * WINDOW_MS).toISOString()
+	for (const [stage, t] of ticks) {
+		console.log(
+			JSON.stringify({
+				drexbot: 'bee/1',
+				event: 'tick',
+				run: __ENV.BEE_RUN,
+				bee: __ENV.BEE_ID,
+				kind: 'protocol',
+				at,
+				stage,
+				...t,
+			}),
+		)
+	}
+	ticks = new Map()
+}
+
+const tickFor = s => {
+	const now = Math.floor(Date.now() / WINDOW_MS)
+	if (now !== tickWindow) {
+		writeTicks()
+		tickWindow = now
+	}
+	const stage = stages[s]
+	if (stage.startsWith(JOURNEY_PREFIX)) return undefined
+	const t = ticks.get(stage) ?? { count: 0, failures: 0, statuses: {}, ttfb: {}, total: {} }
+	ticks.set(stage, t)
+	return t
+}
+
+const addTo = (histogram, ms) => {
+	const b = String(bucketOf(ms))
+	histogram[b] = (histogram[b] ?? 0) + 1
+}
+
 // Counts one request, or one journey, against a stage. A status of 0 is no response at all.
 const tally = (s, status, ttfb, total) => {
 	const c = counters[s]
 	c.count.add(1)
 	if (status < 200 || status >= 400) c.failures.add(1)
 	const code = status === 0 ? 'error' : String(status)
-	c.statuses[STATUSES.includes(code) || code === 'error' ? code : 'other'].add(1)
+	const counted = STATUSES.includes(code) || code === 'error' ? code : 'other'
+	c.statuses[counted].add(1)
 	if (status !== 0) {
 		if (ttfb !== undefined) c.ttfb[bucketOf(ttfb)].add(1)
 		c.total[bucketOf(total)].add(1)
+	}
+	const t = tickFor(s)
+	if (t === undefined) return
+	t.count += 1
+	if (status < 200 || status >= 400) t.failures += 1
+	t.statuses[counted] = (t.statuses[counted] ?? 0) + 1
+	if (status !== 0) {
+		if (ttfb !== undefined) addTo(t.ttfb, ttfb)
+		addTo(t.total, total)
 	}
 }
 
@@ -227,6 +282,8 @@ const usable = (stage, response, value) => {
 	if (!served(response)) throw STEP_FAILED
 	if (value === undefined || value === null || value === '') {
 		counters[slot[stage]].failures.add(1)
+		const t = tickFor(slot[stage])
+		if (t !== undefined) t.failures += 1
 		throw STEP_FAILED
 	}
 	return value

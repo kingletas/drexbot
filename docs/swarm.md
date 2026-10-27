@@ -187,7 +187,8 @@ An example, with made-up figures:
 - **Time to first byte is the one measure both kinds take the same way,** so "the store, under both" is what the server did under the whole load.
 - **Percentiles are read from histograms every bee writes,** which add up exactly across bees. A reported value is the top of its bucket: never under the true figure, and at most a quarter over it.
 - **A request still waiting when a bee's time runs out is not counted.** A store the bees can't reach therefore shows as zero requests, never as zero failures, and the record says so.
-- Records are JSON under `results/swarm/`, which is not committed: a timing is a fact about the machines that produced it. `drexbot swarm records` lists them.
+- **The record places the load in time.** The browser bees' windows and the protocol bees' ticks are added into 10-second windows, each named by the instant it ends, and the printed record says when failures began and ended and where no request completed at all, in UTC to the window, so something that happened mid-run can be matched to what the bees saw then without reading another log. The protocol bees' totals still come from their closing lines: each k6 user's last window never reaches the timeline, so its windows add up to a little less than the totals.
+- Records are JSON under `results/swarm/`, which is not committed: a timing is a fact about the machines that produced it. Every line the bees wrote is kept beside its record as `RUN.bee-lines.txt`, so a question the record does not answer can still be asked of the run. `drexbot swarm records` lists them.
 
 ## A run that crosses a deploy
 
@@ -218,7 +219,7 @@ The deploys are printed under the store's line in the record. An example, with m
   protocol bees write one window for the whole run, so they are not split around a deploy
 ```
 
-**The split uses the browser bees only.** A browser bee writes a window every 10 seconds (`BEE_WINDOW_SECONDS`), each with the time it was written. A window that ended before the deploy began is _before_, one that began after it ended is _after_, and any window that overlaps it is _during_, so the edges are as coarse as the window. The split is made twice when the deploy took a maintenance window: around the whole deploy, most of which the store serves normally, and around the window alone, which is where a store answers 503. The sides are different lengths, so read failures as a share and p95 as a time rather than comparing counts. **A protocol bee writes one window for the whole run** (k6 reports only at its end), so its requests cannot be placed before or after anything, and the record says so rather than guessing. A split for protocol bees needs interval windows from the protocol bee first.
+**The split uses the browser bees only.** A browser bee writes a window every 10 seconds (`BEE_WINDOW_SECONDS`), each with the time it was written. A window that ended before the deploy began is _before_, one that began after it ended is _after_, and any window that overlaps it is _during_, so the edges are as coarse as the window. The split is made twice when the deploy took a maintenance window: around the whole deploy, most of which the store serves normally, and around the window alone, which is where a store answers 503. The sides are different lengths, so read failures as a share and p95 as a time rather than comparing counts. **A protocol bee writes one window for the whole run** (k6 reports only at its end), so its requests cannot be placed before or after anything, and the record says so rather than guessing. The protocol bee's ticks place its load in the run's timeline, but this split does not read them.
 
 ## Finding the store's knee
 
@@ -377,7 +378,7 @@ A bee is any image that reads these variables and writes the `bee/1` lines. Stan
 | `BEE_SECONDS`        | Seconds of load, counted once the bee is ready                     |
 | `BEE_LIFETIME`       | Hard limit on the bee's life, enforced by its entrypoint           |
 | `BEE_FORWARD`        | Optional `PORT=HOST:PORT` relays                                   |
-| `BEE_WINDOW_SECONDS` | Browser bee: how often it writes a window of counts (default 10)   |
+| `BEE_WINDOW_SECONDS` | How often a bee writes a window or tick of counts (default 10)     |
 | `BEE_MIX`            | Either kind: `browse` (default), `normal-day` or `checkout-stress` |
 | `BEE_CART_PATH`      | Browser bee: the product a cart or order journey buys              |
 | `BEE_CART_SKU`       | Protocol bee: the simple product a cart or order journey adds      |
@@ -386,6 +387,8 @@ A bee is any image that reads these variables and writes the `bee/1` lines. Stan
 | `BEE_PER_SECONDS`    | Protocol bee: the interval of `BEE_ORDERS`, at least 10            |
 
 A bee writes `started`, then `window` lines of per-stage counts and latency histograms, then `finished`. A protocol bee at a set rate adds `dropped` to its `finished` line: the orders k6 could not start for want of a free user. Windows add up, so a bee stopped early loses only its last one. A stage named `journey:browse`, `journey:cart` or `journey:order` counts whole shoppers, one per journey, and is kept out of every request count and rate.
+
+A protocol bee writes its `window` lines once, at the end, because k6 users share no state. Each user also writes `tick` lines while it runs, in the same shape as a window: its own requests for one stage over the window ending at `at`. Ticks place the load in time and are never added into a total. k6 logs raw to standard output so they reach the conductor; any other line k6 logs there is skipped.
 
 ## What it does not do
 

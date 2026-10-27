@@ -55,6 +55,17 @@ export interface StageWindow {
 	readonly lcp?: Histogram
 }
 
+/**
+ * The protocol bee's timeline: one k6 user's counts for one stage over one
+ * window, ending at `at`. k6 users share no state, so each writes its own, and
+ * a user's last window is lost when k6 stops it. Ticks place load in time and
+ * are never added into a run's totals, which the bee's closing `window` lines
+ * already hold whole.
+ */
+export interface StageTick extends Omit<StageWindow, 'event' | 'lcp'> {
+	readonly event: 'tick'
+}
+
 export interface BeeEvent {
 	readonly drexbot: typeof LINE_TAG
 	readonly event: 'started' | 'finished'
@@ -69,7 +80,7 @@ export interface BeeEvent {
 	readonly dropped?: number
 }
 
-export type BeeLine = StageWindow | BeeEvent
+export type BeeLine = StageWindow | StageTick | BeeEvent
 
 export interface Sample {
 	readonly stage: string

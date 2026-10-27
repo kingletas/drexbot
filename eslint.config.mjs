@@ -41,9 +41,13 @@ export default tseslint.config(
 	},
 	{
 		// The protocol bee runs inside k6, not Node: plain JavaScript with k6's globals and no type information.
+		// Its console is k6's log, which the bee sends raw to standard output to write its timeline.
 		files: ['bees/**/*.js'],
 		...tseslint.configs.disableTypeChecked,
-		languageOptions: { globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' } },
+		languageOptions: {
+			globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', console: 'readonly' },
+		},
+		rules: { 'no-console': 'off' },
 	},
 	{
 		// node:test's describe/it return a promise nobody is meant to await, and a
